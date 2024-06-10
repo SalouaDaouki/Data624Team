@@ -1,0 +1,210 @@
+---
+title: "Homework 1"
+output: html_document
+date: "2024-06-06"
+---
+
+## HA 6.2 (Version 2)
+
+The `plastics` data set consists of the monthly sales (in thousands) of product A for a plastics manufacturer for five years.
+
+> (a) Plot the time series of sales of product A. 
+
+To begin, we're importing the appropriate libraries and then plotting the data.
+
+```{r, 6.2a}
+library(seasonal)
+library(fpp2)
+autoplot(plastics) +
+  ggtitle("Sales for Product A")
+```
+
+The output above is the expected graph.
+
+> (a) Can you identify seasonal fluctuations and/or a trend-cycle?
+
+There are definitely seasonal fluctuations - sales seems to have a cyclical pattern where it peaks around August/September and then goes back down with lows in February. There also seems to be an upwards trend where sales overall increase year over year.
+
+> (b) Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.
+
+We're using decompose here for this problem with the multiplicative type.
+
+```{r, 6.2b}
+decomp <- decompose(plastics, type = "multiplicative")
+
+autoplot(decomp) +
+  ggtitle("Classical Multiplicative Decomposition")
+```
+
+The output above is the expected information from the decomposition. 
+
+> (c) Do the results support the graphical interpretation from part a?
+
+Yes, these results show the seasonal output which shows the cyclical nature of sales as well as the overall trend of it going upwards.
+
+> (d) Compute and plot the seasonally adjusted data.
+
+To do this, we are extracting the necessary information from the decomposition and applying that information to the plastics dataframe.
+
+```{r, 6.2c}
+trend <- decomp$trend
+seasonal <- decomp$seasonal
+random <- decomp$random
+
+seasonally_adjusted <- plastics / seasonal
+
+# Plot the seasonally adjusted data
+autoplot(seasonally_adjusted) +
+  ggtitle("Seasonally Adjusted Sales of Product A") +
+  ylab("Sales (in thousands)") +
+  xlab("Time")
+```
+
+The output above is the expected graph with applied information from the decomposition. 
+
+> Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+
+The outlier we're adding here is just modifying an existing observation by 750.
+
+```{r, 6.2d}
+# outlier: add 750 to the 25th observation
+plastics_outlier <- plastics
+plastics_outlier[6] <- plastics_outlier[6] + 750
+
+decomp_outlier <- decompose(plastics_outlier, type = "multiplicative")
+
+autoplot(decomp_outlier) +
+  ggtitle("Classical Multiplicative Decomposition")
+```
+
+The effect of the outlier is the trend seems to go down before going up, however seasonality remains the same so that was unchanged.
+
+> Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+
+The location difference would change how the trend comes out, however unless there are multiple outliers scattered across the years, the seasonality of the data won't change.
+
+## HA 7.2 (Version 3)
+
+Data set `olympic_running` contains the winning times (in seconds) in each Olympic Games sprint, middle-distance and long-distance track events from 1896 to 2016.
+
+> Plot the winning time against the year for each event. Describe the main features of the plot.
+
+To approach this, we are importing the necessary libraries and then plotting the data.
+
+```{r, 7.2a}
+library(fpp3)
+library(dplyr)
+library(broom)
+
+ggplot(olympic_running, aes(x = Year, y = Time, color = Sex)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~Length, scales = "free_y") +
+  ggtitle("Winning Times in Olympic Track Events (1896-2016)") +
+  xlab("Year") +
+  ylab("Winning Time (seconds)")
+```
+
+The main features of the plot seem to be:
+
+- A downwards trend as the years progress; this indicates athletes are getting faster over time
+- Women are slower than their male counterparts and they don't begin competing until as early as the 1920s / as late as the 1990s for some speeds
+
+> Fit a regression line to the data for each event. Obviously the winning times have been decreasing, but at what average rate per year?
+
+To approach this, we are using the TSLM model to find the trend by sex and length of race.
+
+```{r 7.2b}
+regression_results <- olympic_running |>
+  model(TSLM(Time ~ trend()))
+tidy(regression_results)
+```
+
+The rate of speed differences changes depending on event and gender, however to read this chart, if you look at the 100 event, each winner ran 0.05 seconds on average faster per year and so did the women. For the 200 event, men ran faster by 0.10 while women ran 0.13 faster.
+
+> Plot the residuals against the year. What does this indicate about the suitability of the fitted lines?
+
+To approach this, we're pulling the residuals from the model we created above and plotting them below.
+
+```{r 7.2c, fig.width=14, fig.height=8}
+residuals_df <- residuals(regression_results)
+
+residuals_df |>
+  ggplot(aes(x = Year, y = .resid, color = as.factor(Length))) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  facet_wrap(~Length + Sex, scales = "free_y") +
+  ggtitle("Residuals of Winning Times Regression") +
+  xlab("Year") +
+  ylab("Residuals (seconds)")
+```
+
+The residuals here look relatively random so we could assume that the linear model is a good fit.
+
+> Predict the winning time for each race in the 2020 Olympics. Give a prediction interval for your forecasts. What assumptions have you made in these calculations?
+
+To do this, we are using the forecast library to then predict 2020.
+
+```{r 7.2d}
+library(forecast)
+forecasts <- regression_results |>
+  forecast(h = 1)
+
+forecasts
+```
+
+Above are the predictions - here are the assumptions we're making when forecasting with this model:
+
+- There is no correlation with the errors
+- Residuals are normally distributed (no systematic patterns)
+- The variance is constant
+
+## HA 8.6 (Version 3)
+
+> Forecast the Chinese GDP from the `global_economy` data set using an ETS model. Experiment with the various options in the ETS() function to see how much the forecasts change with damped trend, or with a Box-Cox transformation. Try to develop an intuition of what each is doing to the forecasts. [Hint: use a relatively large value of h when forecasting, so you can clearly see the differences between the various options when plotting the forecasts.]
+
+To approach this problem, we first loaded all the necessary packages and then calculated the optimal Box-Cox lambda using the `guerrero` and `feasts` packages. We then created various ETS models:
+
+- Simple exponential smoothing
+- Holt's linear trend method and the damped version
+- Box-Cox transformation with and without damping
+- Log transformation with and without damping
+
+We then forecasted for the next 15 periods and plotted with `autoplot` and `fable`.
+
+```{r 8.6a}
+library(fable)
+library(fabletools)
+library(feasts)
+library(tsibble)
+library(tidyverse)
+
+data("global_economy")
+
+lambda <- global_economy |>
+  filter(Country == "China") |>
+  features(GDP, features = guerrero) |>
+  pull(lambda_guerrero)
+
+fit_ch <- global_economy |>
+  filter(Country == "China") |>
+  model(
+    `Simple` = ETS(GDP ~ error("A") + trend("N") + season("N")),
+    `Box-Cox` = ETS(box_cox(GDP, lambda) ~ error("A") + trend("A") + season("N")),
+    `Box-Cox Damped` = ETS(box_cox(GDP, lambda) ~ error("A") + trend("Ad", phi = 0.8) + season("N")),
+    `Holt's method` = ETS(GDP ~ error("A") + trend("A") + season("N")),
+    `Damped Holt's method` = ETS(GDP ~ error("A") + trend("Ad", phi = 0.8) + season("N")),
+    `Log` = ETS(log(GDP) ~ error("A") + trend("A") + season("N")),
+    `Log Damped` = ETS(log(GDP) ~ error("A") + trend("Ad", phi = 0.8) + season("N"))
+  )
+
+fc_ch <- fit_ch |>
+  forecast(h = 15)
+
+fc_ch |>
+  autoplot(global_economy, level = NULL) +
+  labs(title = "GDP: China") +
+  guides(colour = guide_legend(title = "Forecast"))
+```
+
+The above is what we expected as it's a graph with various different forecasting methods. The Box-Cox and Log methods are the most extreme versions of growth while Simple and Damped Holt's are the most conservative. The three in the middle, Holt's, Box-Cox Damped, and Log Damped, are more realistic in our opinion as it seems feasible based on the trajectory of their GDP so far.
