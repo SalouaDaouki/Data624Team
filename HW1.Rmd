@@ -1,0 +1,340 @@
+---
+title: "HW1Data624"
+author: "Saloua Daouki"
+date: "2024-06-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## KJ HW 3.1 and 3.2:
+
+**a. 3.1: The UC Irvine Machine Learning Repository contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe. The data can be accessed via:**
+
+> library(mlbench)
+
+> data(Glass)
+
+> str(Glass)
+
+**a. Using visualizations, explore the predictor variables to understand their distributions as well as the relationships between predictors. (b[…]”**
+
+## The data `Glass`:
+
+To explore the data `Glass` and the predictor variables and understand their distributions as well as the relationships between the predictors, we are going to follow the following steps:
+
+-   Load the necessary libraries including loading the dataset,
+
+-   Explore the data and its structure,
+
+-   Visualize the distribution of the predictors,
+
+-   Visualize the relationships between the predictors.
+
+### Loading the data and the libraries:
+
+```{r }
+library(mlbench) # To load the dataset `Glass`
+library(ggplot2) # To visualize the distribution through plots
+library(GGally) # To use the function `ggpairs` for scatter plot matrix of the predictors
+library(tidyr) # To convert the format of the dataset for easy plotting
+library(ggcorrplot) # To plot the correlation matrix
+library(MASS)    # For Box-Cox transformation
+library (caret)  # To find the appropriate transformation
+library(VIM) # to visualize the missing values
+library(dplyr)    # For data manipulation
+```
+
+```{r Loading the data}
+data(Glass)
+```
+
+### Exploring the data and its structure:
+
+```{r}
+# Inspect the data 
+str(Glass)
+```
+
+```{r}
+# Read the first few rows of the original data
+head(Glass)
+```
+
+Based on the function above, the data `Glass` contains 214 observations and 10 variables. Now for easy plotting, let's convert the data format to a long format:
+
+```{r}
+# Convert the format of the data into a long format
+glass_long <- pivot_longer(Glass, cols = c(RI, Na, Mg, Al, Si, K, Ca, Ba, Fe), names_to = "Element", values_to = "Percentage")
+
+# Read the first few rows of the long format of the data
+head(glass_long)
+```
+
+### Visualizing the distribution of the predictors:
+
+Now, let's visualize the distribution of each element on the data; to do so, we are going to plot histograms using `facet_wrap` function:
+
+```{r}
+# Plot histograms for the predictor variables
+ggplot(glass_long, aes(x = Percentage)) +
+  geom_histogram(binwidth = 0.5, fill = "purple", color = "lightblue") +
+  facet_wrap(~ Element, scales = "free") +
+  theme_minimal() +
+  labs(title = "Distribution of Predictor Variables", x = "Percentage", y = "Count")
+```
+
+```{r}
+# Open a new graphics device window
+quartz()
+ggplot(glass_long, aes(x = Percentage)) +
+  geom_histogram(binwidth = 0.5, fill = "purple", color = "lightblue") +
+  facet_wrap(~ Element, scales = "free") +
+  theme_minimal() +
+  labs(title = "Distribution of Predictor Variables", x = "Percentage", y = "Count")
+# Pause for 20 seconds
+Sys.sleep(20)
+```
+
+
+Based on the histograms above, the elements `Al`, `Na` and `Si` have a distribution that is close to normal distribution. The other elements, have right-skewed distribution, such as `K` and `Ba`. The other elements have uniform distribution.
+
+```{r}
+# Plot boxplots for each predictor variable
+ggplot(glass_long, aes(x = Element, y = Percentage)) +
+  geom_boxplot(fill = "chartreuse") +
+  theme_minimal() +
+  labs(title = "Boxplots of Predictor Variables", x = "Element", y = "Percentage")
+```
+
+The boxplots emphasize the distribution shapes of each element showed in the histograms above. Now, let's look at the relationships between the predictor varaibles:
+
+### Visualizing the relationship between the predictors
+
+```{r}
+# Pair plot to visualize relationships between predictor variables
+ggpairs(Glass, columns = 1:9, title = "Scatter Plot Matrix of Predictor Variables")
+```
+
+The diagonal plots show the distribution of each element that we already talked about previously. The off-diagonal scatter plots show the relationship between each two variables; the strongest positive correlation we can see is the 7th row, 1st column; which is between `Rl` and `Ca`.
+
+
+```{r}
+# This code is to open the scatter plots in a new window so we will be able to visualize it better and also take a better screenshot.
+# Open a new graphics device window
+quartz()
+
+# Pair plot to visualize relationships between predictor variables
+ggpairs(Glass, columns = 1:9, title = "Scatter Plot Matrix of Predictor Variables")
+
+# Pause for 20 seconds
+Sys.sleep(20)
+```
+
+Let's continue with visualizing the relationship between the predictors:
+
+```{r}
+# Compute correlation matrix
+corr_matrix <- round(cor(Glass[, 1:9]), 2)
+```
+
+
+```{r}
+# Visualize correlation matrix using ggcorrplot
+ggcorrplot(corr_matrix, lab = TRUE, title = "Correlation Matrix of Predictor Variables")
+```
+
+```{r}
+# Open a new graphics device window
+quartz()
+# Visualize correlation matrix using ggcorrplot
+ggcorrplot(corr_matrix, lab = TRUE, title = "Correlation Matrix of Predictor Variables")
+# Pause for 20 seconds
+Sys.sleep(20)
+```
+
+
+**b. Do there appear to be any outliers in the data? Are any predictors skewed?**
+
+There are outliers; by looking at the histograms and the boxplots, we can see the outliers on the following elements: `Ba`, `Ca`, `K`, `Na`, and `Si`. 
+
+The elements are skewed are: `Ba`, `Ca` and `K`.
+
+**c. Are there any relevant transformations of one or more predictors that might improve the classification model?**
+
+Let's apply the Box-cox transformation to “find the appropriate transformation ”
+
+Excerpt From
+Applied Predictive Modeling
+Max Kuhn and Kjell Johnson
+
+
+```{r}
+# Apply Box-Cox transformation to predictors
+transformed_predictor1 <- BoxCoxTrans(Glass$Ba)
+
+transformed_predictor2 <- BoxCoxTrans(Glass$Ca)
+
+transformed_predictor3 <- BoxCoxTrans(Glass$K)
+
+transformed_predictor1
+transformed_predictor2
+transformed_predictor3
+```
+
+Based on the Box-cox transformation, the first `BA` and the last `K`  the transformation was not applied since the lambda couldn't be estimated, that might be due to the presence of zero or/and negative values in the predictors. On the other hands, the transformation on `Ca` was applied and the lambda was estimated to be -1.1.
+Since those elements are right skewed, we can use log transformation to reduce the right skeweness and improve the model.
+
+## The `Soybean` data:
+
+
+**b. 3.2: “The soybean data can also be found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes.The data can be loaded via:**
+
+> library(mlbench)
+
+> data(Soybean)
+
+> ## See ?Soybean for details
+
+**(a) Investigate the frequency distributions for the categorical predictors. Are any of the distributions degenerate in the ways discussed earlier in this chapter?**
+
+To investigate the frequency distributions for the categorical predictors for the `Soybean` data, we can use the function `table` in R:
+
+```{r}
+# Load soybean dataset
+data(Soybean)
+```
+
+```{r}
+# Display the structure of the dataset
+str(Soybean)
+```
+
+There are 683 observations and 36 variables in the `Soybean` data. All variables are `factors`.
+
+```{r}
+# Investigate frequency distributions for categorical predictors
+categorical_predictors <- c(1:35)  
+```
+
+```{r}
+# Loop through each predictor and display frequency distribution
+for (predictor in categorical_predictors) {
+  print(summary(Soybean[, predictor]))
+}
+```
+
+The results above indicate the frequency distribution of values for the categorical predictors in the `Soybean` dataset. For example: "2-4-d-injury 16" shows that there 16 times where the "2-4-d-injury" occurs in the data.
+
+In the second part of the results above, it shows the frequency of each value within each predictor. For example, the first predictor is `date`, it has the values 1 through 6 and the "NA's" (missing values). So this part of the results:
+  0    1    2    3    4    5    6 NA's 
+  26   75   93  118  131  149   90    1 
+  
+indicates that, in the variable `date`, there are 26 0's, 75 1's, ..., and 1 NA's. These frequencise add up to 683, which is the number f observations we have in the data `Soybean`.
+                      
+**b. Roughly** $18\%$ **of the data are missing. Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?** 
+
+```{r}
+sum(is.na(Soybean))
+```
+
+There are 2337 missing values in the dataset `Soybean`, let's look at the missing values by variable.
+
+```{r}
+# Summarize missing values for each predictor
+NA_summary <- sapply(Soybean, function(x) sum(is.na(x)))
+
+# Convert the summary to a data frame for better readability
+NA_table <- data.frame(Predictor = names(NA_summary), MissingValues = NA_summary)
+
+# Sort the table in descending order of missing values
+NA_table <- NA_table[order(-NA_table$MissingValues), ]
+
+# View the first few rows of the NA_table
+head(NA_table )
+```
+
+We can also calculate the percentages of the missing values and add them to the NA_table:
+
+```{r}
+# Calculate the percentage of missing values
+NA_percentage <- NA_summary / nrow(Soybean) * 100
+
+# Convert the summary to a data frame for better readability
+NA_tableS <- data.frame(Predictor = names(NA_summary), MissingValues = NA_summary, PercentageMissing = NA_percentage)
+
+# Sort the table in descending order of missing values
+NA_tableS <- NA_tableS[order(-NA_tableS$MissingValues), ]
+
+# View the NA_table
+print(NA_tableS)
+```
+
+Let's visualize the missing values:
+
+```{r}
+# Create a horizontal bar graph for the missing values
+ggplot(NA_table, aes(x = reorder(Predictor, MissingValues), y = MissingValues)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +  # Flip the coordinates to make it horizontal
+  labs(title = "Number of Missing Values per Predictor", x = "Predictor", y = "Number of Missing Values") +
+  theme_minimal()
+```
+
+Based on the horizontal bar graph above, we can see that the predictors `hail`, `sever`, `seed.tmt`, `lodging`, `germ`, and `leaf.mild` have higher number of missing values, so these are more likely to be missing.
+
+
+```{r}
+# Analyze if the missing data is related to the classes
+missing_by_class <- Soybean %>%
+  group_by(Class) %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(-Class, names_to = "Predictor", values_to = "MissingValues")
+
+# Calculate the percentage of missing values per class
+missing_by_class <- missing_by_class %>%
+  mutate(PercentageMissing = MissingValues / nrow(Soybean) * 100)
+
+# Visualize missing data per class
+ggplot(missing_by_class, aes(x = Class, y = MissingValues, fill = Predictor)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Missing Values by Predictor and Class", x = "Class", y = "Number of Missing Values") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+This graph by class suggest that the class "phytophthora-rot" has the tallest bars, meaning the more missing data from the predictors `sever`, `germ`and `leaf.halo`. 
+
+```{r}
+# Open a new graphics device window
+quartz()
+ggplot(missing_by_class, aes(x = Class, y = MissingValues, fill = Predictor)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Missing Values by Predictor and Class", x = "Class", y = "Number of Missing Values") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# Pause for 20 seconds
+Sys.sleep(20)
+```
+
+
+**c. Develop a strategy for handling missing data, either by eliminating predictors or imputation.”**
+
+I think it will make sense to remove the predictors that have more than 80% of missing values, but based on the NA_table, the highest percentage of the missing values is around 18%. So we think that the best strategy to handle the missing values is imputation. We can perform a simple imputation with mode, since the varaibles are categorical:
+
+```{r}
+# Function to impute missing values with mode
+impute_missing_values_mode <- function(data) {
+  data %>%
+    mutate(across(where(is.factor), ~ ifelse(is.na(.), as.character(mode(.)), as.character(.))))
+}
+
+# Impute missing values with mode for factor variables
+Soybean_imputed_mode <- impute_missing_values_mode(Soybean)
+
+# Check the imputed dataset
+str(Soybean_imputed_mode)
+```
+
+
+
