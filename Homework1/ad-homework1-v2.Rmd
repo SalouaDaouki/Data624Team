@@ -1,0 +1,240 @@
+---
+title: "Homework 1"
+output: html_document
+date: "2024-06-06"
+---
+
+## HA 6.2 (Version 2)
+
+The `plastics` data set consists of the monthly sales (in thousands) of product A for a plastics manufacturer for five years.
+
+> (a) Plot the time series of sales of product A. 
+
+To begin, we're importing the appropriate libraries and then plotting the data.
+
+```{r, 6.2a}
+library(seasonal)
+library(fpp2)
+autoplot(plastics) +
+  ggtitle("Sales for Product A")
+```
+
+The output above is the expected graph.
+
+> (a) Can you identify seasonal fluctuations and/or a trend-cycle?
+
+There are definitely seasonal fluctuations - sales seems to have a cyclical pattern where it peaks around August/September and then goes back down with lows in February. There also seems to be an upwards trend where sales overall increase year over year.
+
+> (b) Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.
+
+We're using decompose here for this problem with the multiplicative type.
+
+```{r, 6.2b}
+decomp <- decompose(plastics, type = "multiplicative")
+
+autoplot(decomp) +
+  ggtitle("Classical Multiplicative Decomposition")
+```
+
+The output above is the expected information from the decomposition. 
+
+> (c) Do the results support the graphical interpretation from part a?
+
+Yes, these results show the seasonal output which shows the cyclical nature of sales as well as the overall trend of it going upwards.
+
+> (d) Compute and plot the seasonally adjusted data.
+
+To do this, we are extracting the necessary information from the decomposition and applying that information to the plastics dataframe.
+
+```{r, 6.2c}
+trend <- decomp$trend
+seasonal <- decomp$seasonal
+random <- decomp$random
+
+seasonally_adjusted <- plastics / seasonal
+
+# Plot the seasonally adjusted data
+autoplot(seasonally_adjusted) +
+  ggtitle("Seasonally Adjusted Sales of Product A") +
+  ylab("Sales (in thousands)") +
+  xlab("Time")
+```
+
+The output above is the expected graph with applied information from the decomposition. 
+
+> Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+
+The outlier we're adding here is just modifying an existing observation by 750.
+
+```{r, 6.2d}
+# outlier: add 750 to the 25th observation
+plastics_outlier <- plastics
+plastics_outlier[6] <- plastics_outlier[6] + 750
+
+decomp_outlier <- decompose(plastics_outlier, type = "multiplicative")
+
+autoplot(decomp_outlier) +
+  ggtitle("Classical Multiplicative Decomposition")
+```
+
+The effect of the outlier is the trend seems to go down before going up, however seasonality remains the same so that was unchanged.
+
+> Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+
+The location difference would change how the trend comes out, however unless there are multiple outliers scattered across the years, the seasonality of the data won't change.
+
+## HA 7.2 (Version 2)
+
+Write your own function to implement simple exponential smoothing. The function should take arguments `y` (the time series), `alpha` (the smoothing parameter $\alpha$) and `level` (the initial level$\ell_0$
+ ). It should return the forecast of the next observation in the series. Does it give the same forecast as `ses()`?
+ 
+```{r 7.2}
+library(forecast)
+
+# define the simple exponential smoothing function
+simple_exponential_smoothing <- function(y, alpha, level) {
+  l <- level  # initial level
+  for (t in seq_along(y)) {
+    l <- alpha * y[t] + (1 - alpha) * l
+  }
+  # the forecast for the next observation is the last level value
+  return(l)
+}
+
+# example
+y <- c(3, 10, 12, 13, 12, 10, 12)
+alpha <- 0.2
+initial_level <- y[1]
+
+forecast_custom <- simple_exponential_smoothing(y, alpha, initial_level)
+cat("The forecast for the next observation using custom function is:", forecast_custom, "\n")
+
+# using the forecast package's ses() function
+ses_model <- ses(y, alpha = alpha, initial = "simple", h = 1)
+forecast_ses <- ses_model$mean
+cat("The forecast for the next observation using forecast::ses function is:", forecast_ses, "\n")
+```
+
+This does return the same result!
+
+## HA 8.6 (Version 2)
+
+> Use R to simulate and plot some data from simple ARIMA models.
+
+Use the following R code to generate data from an AR(1) model with $\theta_1 = 0.6$ and $\sigma^2 = 1$. The process starts with $y_1=0$
+
+```{r 8.6}
+y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 2:100)
+  y[i] <- 0.6*y[i-1] + e[i]
+```
+
+> Produce a time plot for the series. How does the plot change as you change $\varphi_1$?
+
+We will use ggplot to plot this. 
+
+```{r 8.6a}
+library(ggplot2)
+autoplot(y) + ggtitle("AR(1) Model Time Series with φ1 = 0.6") + ylab("y") + xlab("Time")
+```
+
+Now, we will modify $\varphi_1$ to be 0.2, 0.6, and 0.9.
+
+```{r 6.8a2}
+phi_values <- c(0.2, 0.6, 0.9)
+plots <- lapply(phi_values, function(phi1) {
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100) {
+    y[i] <- phi1 * y[i-1] + e[i]
+  }
+  autoplot(y) + ggtitle(paste("AR(1) Model Time Series with φ1 =", phi1)) + ylab("y") + xlab("Time")
+})
+
+# display differences
+library(gridExtra)
+do.call(grid.arrange, c(plots, ncol = 1))
+```
+
+We can see that with the different values, as it got higher, the less messy the data got (less peaks/valleys). You could say that as it increases, the series becomes more persistent with deviations lasting longer while lower values has it behave similar to white noise.
+
+> Write your own code to generate data from an MA(1) model with $\theta_1=0.6$ and $\sigma^2=1$
+
+```{r 8.6b}
+theta1 <- 0.6
+y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 2:100) {
+  y[i] <- e[i] + theta1 * e[i-1]
+}
+```
+
+> Produce a time plot for the series. How does the plot change as you change $\theta_1$?
+
+First, we will produce a plot.
+
+```{r 8.6c}
+autoplot(y) + ggtitle("MA(1) Model Time Series with θ1 = 0.6") + ylab("y") + xlab("Time")
+```
+
+Now we will modify $\theta_1$ to be 0.2, 0.6, and 0.9.
+
+```{r 8.6c2}
+theta_values <- c(0.2, 0.6, 0.9)
+plots <- lapply(theta_values, function(theta1) {
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100) {
+    y[i] <- e[i] + theta1 * e[i-1]
+  }
+  autoplot(y) + ggtitle(paste("MA(1) Model Time Series with θ1 =", theta1)) + ylab("y") + xlab("Time")
+})
+
+# display plots
+do.call(grid.arrange, c(plots, ncol = 1))
+```
+
+Similar to the previous alteration, as we make the variable larger, the series becomes more smoothed while the lower it is, the more random it is.
+
+> Generate data from an ARMA(1,1) model with $\varphi_1=0.6$, $\theta_1=0.6$ and $\sigma^2=1$.
+
+We will generate the data with the given variables.
+
+```{r 8.6d}
+phi1 <- 0.6
+theta1 <- 0.6
+y_arma11 <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 2:100) {
+  y_arma11[i] <- phi1 * y_arma11[i-1] + e[i] + theta1 * e[i-1]
+}
+```
+
+> Generate data from an AR(2) model with $\varphi_1=−0.8$, $\theta_2=0.3$, and $\sigma^2=1$. (Note that these parameters will give a non-stationary series.)
+
+We will generate the data with the given variables.
+
+```{r 8.6e}
+phi1 <- -0.8
+theta2 <- 0.3
+y_ar2 <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 3:100) {
+  y_ar2[i] <- phi1 * y_ar2[i-1] + theta2 * y_ar2[i-2] + e[i]
+}
+```
+
+> Graph the latter two series and compare them.
+
+Now, we will plot the data.
+
+```{r 8.6f}
+p1 <- autoplot(y_arma11) + ggtitle("ARMA(1,1) Model Time Series with φ1 = 0.6 and θ1 = 0.6") + ylab("y") + xlab("Time")
+p2 <- autoplot(y_ar2) + ggtitle("AR(2) Model Time Series with φ1 = -0.8 and φ2 = 0.3") + ylab("y") + xlab("Time")
+
+library(gridExtra)
+grid.arrange(p1, p2, ncol = 1)
+```
+
+Given that the latter model is non-stationary, it very much oscillates up and down more AR(1) with some exponential increase in the variance. AR(1) is more similar to white noise.
