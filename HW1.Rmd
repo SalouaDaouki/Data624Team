@@ -98,7 +98,6 @@ ggplot(glass_long, aes(x = Percentage)) +
 Sys.sleep(20)
 ```
 
-
 Based on the histograms above, the elements `Al`, `Na` and `Si` have a distribution that is close to normal distribution. The other elements, have right-skewed distribution, such as `K` and `Ba`. The other elements have uniform distribution.
 
 ```{r}
@@ -120,7 +119,6 @@ ggpairs(Glass, columns = 1:9, title = "Scatter Plot Matrix of Predictor Variable
 
 The diagonal plots show the distribution of each element that we already talked about previously. The off-diagonal scatter plots show the relationship between each two variables; the strongest positive correlation we can see is the 7th row, 1st column; which is between `Rl` and `Ca`.
 
-
 ```{r}
 # This code is to open the scatter plots in a new window so we will be able to visualize it better and also take a better screenshot.
 # Open a new graphics device window
@@ -140,7 +138,6 @@ Let's continue with visualizing the relationship between the predictors:
 corr_matrix <- round(cor(Glass[, 1:9]), 2)
 ```
 
-
 ```{r}
 # Visualize correlation matrix using ggcorrplot
 ggcorrplot(corr_matrix, lab = TRUE, title = "Correlation Matrix of Predictor Variables")
@@ -155,10 +152,9 @@ ggcorrplot(corr_matrix, lab = TRUE, title = "Correlation Matrix of Predictor Var
 Sys.sleep(20)
 ```
 
-
 **b. Do there appear to be any outliers in the data? Are any predictors skewed?**
 
-There are outliers; by looking at the histograms and the boxplots, we can see the outliers on the following elements: `Ba`, `Ca`, `K`, `Na`, and `Si`. 
+There are outliers; by looking at the histograms and the boxplots, we can see the outliers on the following elements: `Ba`, `Ca`, `K`, `Na`, and `Si`.
 
 The elements are skewed are: `Ba`, `Ca` and `K`.
 
@@ -166,10 +162,7 @@ The elements are skewed are: `Ba`, `Ca` and `K`.
 
 Let's apply the Box-cox transformation to “find the appropriate transformation ”
 
-Excerpt From
-Applied Predictive Modeling
-Max Kuhn and Kjell Johnson
-
+Excerpt From Applied Predictive Modeling Max Kuhn and Kjell Johnson
 
 ```{r}
 # Apply Box-Cox transformation to predictors
@@ -184,11 +177,9 @@ transformed_predictor2
 transformed_predictor3
 ```
 
-Based on the Box-cox transformation, the first `BA` and the last `K`  the transformation was not applied since the lambda couldn't be estimated, that might be due to the presence of zero or/and negative values in the predictors. On the other hands, the transformation on `Ca` was applied and the lambda was estimated to be -1.1.
-Since those elements are right skewed, we can use log transformation to reduce the right skeweness and improve the model.
+Based on the Box-cox transformation, the first `BA` and the last `K` the transformation was not applied since the lambda couldn't be estimated, that might be due to the presence of zero or/and negative values in the predictors. On the other hands, the transformation on `Ca` was applied and the lambda was estimated to be -1.1. Since those elements are right skewed, we can use log transformation to reduce the right skeweness and improve the model.
 
 ## The `Soybean` data:
-
 
 **b. 3.2: “The soybean data can also be found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes.The data can be loaded via:**
 
@@ -228,13 +219,11 @@ for (predictor in categorical_predictors) {
 
 The results above indicate the frequency distribution of values for the categorical predictors in the `Soybean` dataset. For example: "2-4-d-injury 16" shows that there 16 times where the "2-4-d-injury" occurs in the data.
 
-In the second part of the results above, it shows the frequency of each value within each predictor. For example, the first predictor is `date`, it has the values 1 through 6 and the "NA's" (missing values). So this part of the results:
-  0    1    2    3    4    5    6 NA's 
-  26   75   93  118  131  149   90    1 
-  
+In the second part of the results above, it shows the frequency of each value within each predictor. For example, the first predictor is `date`, it has the values 1 through 6 and the "NA's" (missing values). So this part of the results: 0 1 2 3 4 5 6 NA's 26 75 93 118 131 149 90 1
+
 indicates that, in the variable `date`, there are 26 0's, 75 1's, ..., and 1 NA's. These frequencise add up to 683, which is the number f observations we have in the data `Soybean`.
-                      
-**b. Roughly** $18\%$ **of the data are missing. Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?** 
+
+**b. Roughly** $18\%$ **of the data are missing. Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?**
 
 ```{r}
 sum(is.na(Soybean))
@@ -285,7 +274,6 @@ ggplot(NA_table, aes(x = reorder(Predictor, MissingValues), y = MissingValues)) 
 
 Based on the horizontal bar graph above, we can see that the predictors `hail`, `sever`, `seed.tmt`, `lodging`, `germ`, and `leaf.mild` have higher number of missing values, so these are more likely to be missing.
 
-
 ```{r}
 # Analyze if the missing data is related to the classes
 missing_by_class <- Soybean %>%
@@ -304,7 +292,7 @@ ggplot(missing_by_class, aes(x = Class, y = MissingValues, fill = Predictor)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-This graph by class suggest that the class "phytophthora-rot" has the tallest bars, meaning the more missing data from the predictors `sever`, `germ`and `leaf.halo`. 
+This graph by class suggest that the class "phytophthora-rot" has the tallest bars, meaning the more missing data from the predictors `sever`, `germ`and `leaf.halo`.
 
 ```{r}
 # Open a new graphics device window
@@ -316,7 +304,6 @@ ggplot(missing_by_class, aes(x = Class, y = MissingValues, fill = Predictor)) +
 # Pause for 20 seconds
 Sys.sleep(20)
 ```
-
 
 **c. Develop a strategy for handling missing data, either by eliminating predictors or imputation.”**
 
@@ -336,5 +323,146 @@ Soybean_imputed_mode <- impute_missing_values_mode(Soybean)
 str(Soybean_imputed_mode)
 ```
 
+## Exercise 8.1:
 
+8.1 (V3): Consider the number of pigs slaughtered in Victoria, available in the aus_livestock dataset.
+
+a.  Use the ETS() function to estimate the equivalent model for simple exponential smoothing. Find the optimal values of 𝛼 and ℓ0, and generate forecasts for the next four months.
+
+```{r}
+# Load necessary libraries
+library(fpp2)
+
+# Load the dataset
+data("aus_livestock")
+
+# Filter the data for pigs slaughtered in Victoria
+pigs <- aus_livestock %>% 
+  filter(Animal == "Pigs" & State == "Victoria")
+
+# Plot the time series
+pigs_Plot <- pigs %>%
+  autoplot(Count) +
+  labs(title = 'Pigs Slaughtered in Victoria Timeseries')
+
+# Disply the plot
+pigs_Plot
+```
+
+Next, we are going to Use the ETS() function to estimate the equivalent model for simple exponential smoothing:
+
+```{r}
+# Fit an ETS model equivalent to simple exponential smoothing
+fit <- pigs %>%
+  model(ETS(Count ~ error("A") + trend("N") + season("N")))
+
+# Display the model to get the optimal alpha and initial level (l0)
+report(fit)
+```
+
+Now we can generate the forecast for the next four months:
+
+```{r}
+# Generate forecasts for the next four months
+forecasts <- fit %>%
+  forecast(h = "4 months")
+
+# Display the forecasts
+print(forecasts)
+```
+
+We also can visualize the forecasts:
+
+```{r}
+Forcast_Plot <- fit %>%
+  forecast(h = 4) %>%
+  autoplot(filter(pigs, Month >= yearmonth('2017 Jan'))) +
+  labs(title = 'Four Month Forecast Data')
+Forcast_Plot
+```
+
+The graph above indicates that there is a 95% probability that the actual future values will fall within this interval that is shades light blue.
+
+b.  Compute a 95% prediction interval for the first forecast using y±1.96 where 𝑠 is the standard deviation of the residuals. Compare your interval with the interval produced by R.
+
+Now, to compute the prediction interval, we need to get the residuals from the fitted model
+
+```{r}
+# Get the first forecast.
+y <- forecasts %>%
+  pull(Count) %>%
+  head(1)
+
+# Get the standard deviation of the residuals.
+std <- augment(fit) %>%
+  pull(.resid) %>%
+  sd()
+
+# Calculate the lower and upper confidence intervals. 
+lowerCi <- y - 1.96 * std
+upperCi <- y + 1.96 * std
+results <- c(lowerCi, upperCi)
+names(results) <- c('Lower', 'Upper')
+results
+```
+
+The 95% prediction interval is $[76871, 113502]$
+
+To compare my interval with the interval produced by R, we can use the `hilo()` function which is "Used to extract a specified prediction interval at a particular confidence level from a distribution." [RADAR](https://www.rdocumentation.org/packages/distributional/versions/0.4.0/topics/hilo#)
+
+```{r}
+# Calculate 95% prediction interval using hilo()
+prediction_interval <- hilo(forecasts$Count, 95)
+
+# Print the prediction interval
+print(prediction_interval)
+```
+
+The above intervals, calculated by R, are slightly wider than the manual interval $[76871, 113502]$.
+
+## Exercise 8.2
+
+(V3): Write your own function to implement simple exponential smoothing. The function should take arguments y (the time series), alpha (the smoothing parameter α) and level (the initial level ℓ0). It should return the forecast of the next observation in the series. Does it give the same forecast as ETS()?
+
+Let's create the function first,
+
+```{r}
+# Load necessary libraries
+library(forecast)
+
+# Custom function for Simple Exponential Smoothing (SES)
+ses_forecast <- function(y, alpha, level) {
+  # Calculate forecast for the next observation
+  forecast <- alpha * y[length(y)] + (1 - alpha) * level
+  return(forecast)
+}
+```
+
+
+Then, let's use it on pigs dataset,
+
+```{r}
+y <- pigs$Count
+alpha <- 0.3221247 # same as we got in the previous exercise  
+level <- y[1]  # Initial level as the first observation
+
+# Calculate forecast using custom SES function
+ses_forecast_result <- ses_forecast(y, alpha, level)
+cat("SES Forecast:", ses_forecast_result, "\n")
+```
+
+Now, we can compare the forecasts:
+
+```{r}
+# Fit ETS model using fable package
+fit <- pigs %>%
+  as_tsibble() %>%
+  model(ETS(Count ~ error("A") + trend("N") + season("N")))
+
+# Generate forecast using ETS
+ets_forecast <- forecast(fit, h = 1)$.mean
+cat("ETS Forecast:", ets_forecast, "\n")
+```
+
+Both SES and ETS forecasts are close, even though SES is more simpler approach than ETS.
 
