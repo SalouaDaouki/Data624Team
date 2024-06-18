@@ -16,7 +16,7 @@ library(fpp2)
 library(fpp3)
 ```
 
-#Data Importing and Indexing
+# Data Importing and Indexing
 
 ```{r}
 data_start_ind <- 1
@@ -24,14 +24,14 @@ data_end_ind <- 1622
 forecast_stary_ind <- 1623
 forecast_end_ind <- 1722
 
-path <- 'dataset.xls'
+path <- paste(getwd(), '/Data Set for Class.xls', sep="")
 sheet_name <- 'S03'
 
 # Read the specified sheet from the Excel file
 s03 <- read_excel(path, sheet = sheet_name)
 ```
 
-#Data Visualization
+# Data Visualization
 
 ```{r}
 var5_plot <- ggplot(s03, aes(x = SeriesInd, y = Var05)) +
@@ -51,7 +51,7 @@ var7_plot <- ggplot(s03, aes(x = SeriesInd, y = Var07)) +
 grid.arrange(var5_plot, var7_plot, nrow = 2)
 ```
 
-#Data Imputation 
+# Data Imputation 
 I'm using linear imputation, so creating a line of best fit between the last two known points and filling in missing values along that line
 
 ```{r}
@@ -75,7 +75,7 @@ s03$Var07[data_range][na_var7] <- imputed_var7[na_var7]
 Values to forecast: 43022 - 43221
 index numbers: 1623 - 1762
 
-#Checking for Stationarity
+# Checking for Stationarity
 
 ```{r stationarity}
 acf_var5 <- acf(s03$Var05[data_range], plot = FALSE)
@@ -95,7 +95,7 @@ acf2 <- ggplot(acf_var7_df, aes(x = lag, y = acf)) +
 grid.arrange(acf1, acf2, nrow=2)
 ```
 
-```{r pacf}
+```{r pacf2}
 pacf_var5 <- pacf(s03$Var05[data_range], plot = FALSE)
 pacf_var7 <- pacf(s03$Var07[data_range], plot = FALSE)
 
