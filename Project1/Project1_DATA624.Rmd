@@ -1,0 +1,517 @@
+---
+title: "Project1_DATA624"
+author: "Saloua Daouki"
+date: "2024-06-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading the necessary libraries
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(forecast)
+library(dplyr)
+library(tseries)
+library(gridExtra)
+library(tsibble)
+library(fable)
+library(TSA)
+```
+
+## Load and Prepare the Data
+
+First we are going to load the full data and explore the data as a whole, then we are going to split them based on the `category` column
+
+```{r}
+ClassData <- read_excel("/Users/salouadaouki/Desktop/Data 624/Data624Team/Project1/Data Set for Class 2.xls")
+```
+
+Let's inspect the format and the structure of the data and chech whether it is a times series or not:
+
+```{r}
+# Display the first few rows of the dataset
+head(ClassData)
+```
+
+```{r}
+# Display the structure of the dataset
+str(ClassData)
+```
+
+```{r}
+# Display summary statistics of the dataset
+summary(ClassData)
+```
+
+```{r}
+glimpse(ClassData)
+```
+
+Apparently, the data is not a times series, let's convert it to times series format before any further analysis. To do so, we need to convert the column `SeriesInd` to date/time format.
+
+```{r}
+# Convert Excel serial date numbers to Date class
+ClassData_date <- ClassData %>%
+  mutate(Date = as.Date(SeriesInd, origin = "1899-12-30"))  # Note: "1899-12-30" is the correct origin for Excel dates
+```
+
+We can also convert the original data into tidy temporal data frame:
+
+```{r}
+# Convert data into a tsibble (tidy temporal data frame)
+data_tsibble <- as_tsibble(data, index = Date)
+```
+
+Trying to convert the data to `tsibble` using the `SeriesInd` column only, we countered an error, because the column `SeriesInd` has duplicated numbers. Those duplicates due to the six different categories. So, to resolve this issue, we can still convert the data to `tsibble` but using both `SeriesInd` and `category` as indices.
+
+```{r}
+# Convert data into a tsibble (tidy temporal data frame) using SeriesInd and category as the indexes
+data_tsibble <- as_tsibble(ClassData, key = category, index = SeriesInd)
+```
+
+```{r}
+glimpse(data_tsibble)
+```
+
+Now we can explore the data by plotting a visualization:
+
+```{r}
+# Explore the data against each Var
+# Plot Var01 
+autoplot(data_tsibble, .vars=Var01)
+```
+
+The plot of `Var01` shows a slight upward trend, indicating that `Var01` is generally increasing over time. It also shows that there are outliers in categories `S02` and `S06`. `S06` has the outlier between 41000 and 42000. `S06` has the outlier between 42500 and 43000.
+
+```{r}
+# Plot Var02
+autoplot(data_tsibble, .vars=Var02)
+```
+
+The plot of `Var02` show many spikes across the categories, especially `S03`. This shows sharp increases in different times. There might be certain factors that causes those changes in that category.
+
+```{r}
+# Plot Var03
+autoplot(data_tsibble, .vars=Var03)
+```
+
+`Var03` plot shows the same trend as `Var01`; there is slight increase in most categories.
+
+```{r}
+# Plot Var05
+autoplot(data_tsibble, .vars=Var05)
+```
+
+```{r}
+# Plot Var07
+autoplot(data_tsibble, .vars=Var07)
+```
+
+Both `Var05` and `Var07` show the same trend as `Var01` and `Var03`. Unlike `Var02`, there is no clear repeating pattern every period. Plus, the fluctuations are moderate which ssuggest that there is randomness in the data.
+
+Now that we have clear visualization of the data, we can check the stationary using the ACF plot that will enables us to visually inspect stationarity. A stationary time series is one whose statistical properties such as mean, variance, and autocorrelation structure do not change over time. In other words, there is a slow decay in autocorrelation values.
+
+```{r}
+# Plot ACF to check stationarity
+acf(data_tsibble, main = "ACF Plot")
+```
+
+Again, we cannot plot the ACF across the entire data because, first, it is not in the format of ts (time series), and then we cannot convert the whole data to ts since the index has multiple series that are distinguished by `category`.
+
+In this case, we could write a code chunk for every category to convert it to ts. Or, we can make our life easier and take advantage of `functions` in R. So, we are going to write a function that takes the `data_tsibble` and category as parameters and filter the data based on each category and return a sub-data in the form od times series:
+
+```{r}
+# List to store ts objects for each category
+ts_category_list <- list()
+```
+
+```{r}
+# List of categories
+categories <- unique(data_tsibble$category)
+```
+
+```{r}
+# Function to handle linear imputation and convert to ts object
+convert_to_ts <- function(filtered_data) {
+  # Linear imputation for NA values in each variable
+  filtered_data <- filtered_data %>%
+    mutate(across(starts_with("Var"), ~ zoo::na.approx(.x, na.rm = FALSE)))
+  
+  # Check if there are any remaining NA values after imputation
+  if (anyNA(filtered_data)) {
+    stop("Data still contains NA values after imputation.")
+  }
+  
+  # Convert to ts object
+  ts_data <- ts(filtered_data[, -c(1, 2)], start = min(filtered_data$SeriesInd), frequency = 1)
+  return(ts_data)
+}
+```
+
+```{r}
+# Loop through each category and convert to ts object
+for (category in categories) {
+  # Filter data for the specific category and SeriesInd < 43022
+  filtered_data <- data_tsibble %>%
+    filter(category == category, SeriesInd < 43022)
+  
+  # Convert to ts object and store in the list
+  ts_category_list[[category]] <- convert_to_ts(filtered_data)
+  
+  # Plot ACF for the current category
+  ts_data <- ts_category_list[[category]]
+  plot_acf_title <- paste("ACF Plot for Category", category)
+  acf(ts_data, main = plot_acf_title)
+}
+```
+
+All ACF plots above show a high autocorrelation at lag 0 (the center of the plot) and a slowly decaying autocorrelation as you move away from lag 0. This indicates that the time series data might be non-stationary, so we need to fix that by differencing the data; we may need to repeat the process until we achieve our goal; namely to achieve stationarity.
+
+The process of differencing is basically subtracting the previous observation from the current observation, which helps remove trends and seasonality.
+
+```{r}
+# First difference
+ts_data_diff <- diff(ts_data, differences = 1)
+# Check ACF of differenced series
+acf(ts_data_diff, main = "ACF Plot of Differenced Series")
+```
+
+```{r}
+# Check stationarity with ADF test
+adf_test_1 <- adf.test(ts_data_diff)
+print(adf_test_1$p.value)  # If p-value < 0.05, the series is stationary
+```
+
+Passing the entire data to the function `adf.test` didn't work; it gives an error indicating that the function's input is not a vector or univariate time series. To resolve this issue, we are going to perform the rest of the analysis; including the ARIMA modeling, on each category separately.
+
+# Category S06
+
+## Loading the data for category `S06`
+
+First, let's load the subset of the data into the environment for category `S06`;
+
+```{r}
+# Define the indices for the data and forecast range
+data_start_ind <- 1
+data_end_ind <- 1622
+forecast_stary_ind <- 1623
+forecast_end_ind <- 1722
+
+# Define the file path and sheet name
+path <- "/Users/salouadaouki/Desktop/Data 624/Data624Team/Project1/Data Set for Class.xls"
+sheet_name <- 'S06'
+
+# Read the specified sheet from the Excel file
+s06 <- read_excel(path, sheet = sheet_name)
+
+# Display the first few rows to confirm the data is read correctly
+head(s06)
+```
+
+Perfect! The last sheet of the data has been uploaded successfully, now let's perform all the steps that were mentioned on above to analyse and forecast the data by category.
+
+## Data Visualization
+
+```{r}
+var5_plot_S6 <- ggplot(s06, aes(x = SeriesInd, y = Var05)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var05 vs Series Index", x = "Series Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+var7_plot_S6 <- ggplot(s06, aes(x = SeriesInd, y = Var07)) +
+  geom_point(color = "orange") +
+  labs(title = "Plot of Var07 vs Series Index", x = "Series Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+grid.arrange(var5_plot_S6, var7_plot_S6, nrow = 2)
+```
+
+Both `Var05` and `Var07` show slow increasing curve which suggests that both variables have a positive trend over time. This means that, on average, the values of these variables are increasing as the SeriesInd progresses. In addition, the presence of an outlier for both variables at the same Series Index suggests that there may be some deviation from the rest of the data in that specific index; either there was an error or unusual event that causes this change.
+
+For further analysis and better understanding of the outlier, we can investigate the outlier even further and plot the difference series to check for stationarity:
+
+```{r}
+outlier_index <- which(s06$SeriesInd == 41128)  
+print(s06[outlier_index, ])
+```
+
+```{r}
+s06 <- s06 %>% 
+  mutate(diff_Var05 = diff(c(NA, Var05)), diff_Var07 = diff(c(NA, Var07)))
+
+diff_var5_plot <- ggplot(s06, aes(x = SeriesInd, y = diff_Var05)) +
+  geom_point(color = "blue") +
+  labs(title = "Differenced Plot of Var05 vs Series Index", x = "Series Index", y = "Differenced Value") +
+  theme_minimal()
+
+diff_var7_plot <- ggplot(s06, aes(x = SeriesInd, y = diff_Var07)) +
+  geom_point(color = "orange") +
+  labs(title = "Differenced Plot of Var07 vs Series Index", x = "Series Index", y = "Differenced Value") +
+  theme_minimal()
+
+grid.arrange(diff_var5_plot, diff_var7_plot, nrow = 2)
+```
+
+After differencing the data, most values are close to zero, except for a few outliers (the two points on top and bottom at the same series index).
+
+## Data Imputation
+
+Data imputation is crucial for handling missing values in a dataset, especially in time series analysis where continuity of data points is important for accurate modeling and forecasting. In this project, linear imputation is used to fill in missing values for the variables `Var05` and `Var07`.
+
+### Linear Imputation Method:
+
+Linear imputation involves creating a line of best fit between the known data points on either side of the missing values and then filling in the missing values along that line. This method is effective for time series data where the assumption of a linear trend between points is reasonable.
+
+#### Steps for Linear Imputation:
+
+-   Identify the Data Range and Missing Values:
+
+We first identify the range of data (in this case, indices less than 43022) and locate the missing values within this range.
+
+```{r}
+data_range <- which(s06$SeriesInd < 43022)
+na_var5_S6 <- which(is.na(s06$Var05[data_range]))
+na_var7_S6 <- which(is.na(s06$Var07[data_range]))
+```
+
+-   Perform Linear Imputation:
+
+Using the approx function, we perform linear interpolation to estimate the missing values based on the surrounding data points.
+
+```{r}
+imputed_var5_S6 <- approx(x = s06$SeriesInd[data_range], y = s06$Var05[data_range], 
+                              xout = s06$SeriesInd[data_range])$y
+imputed_var7_S6 <- approx(x = s06$SeriesInd[data_range], y = s06$Var07[data_range], 
+                              xout = s06$SeriesInd[data_range])$y
+```
+
+-   Replace Missing Values with Imputed Values:
+
+Finally, we replace the missing values in the dataset with the imputed values.
+
+```{r}
+s06$Var05[data_range][na_var5_S6] <- imputed_var5[na_var5]
+s06$Var07[data_range][na_var7_S6] <- imputed_var7[na_var7]
+```
+
+Values to forecast: 43022 - 43221 index numbers: 1623 - 1762
+
+## Checking for Stationarity
+
+Stationarity is a critical property of time series data, indicating that the statistical properties such as mean and variance are constant over time. To check for stationarity, we use the Autocorrelation Function (ACF).
+
+#### Steps for Checking Stationarity:
+
+-   Calculate ACF for `Var05` and `Var07`:
+
+```{r stationarity}
+acf_var5_S6 <- acf(s06$Var05[data_range], plot = FALSE)
+acf_var7_S6 <- acf(s06$Var07[data_range], plot = FALSE)
+
+acf_var5_df6 <- data.frame(lag = acf_var5_S6$lag, acf = acf_var5_S6$acf)
+acf_var7_df6 <- data.frame(lag = acf_var7_S6$lag, acf = acf_var7_S6$acf)
+```
+
+-   Plot the ACF
+
+```{r}
+acf1_S6 <- ggplot(acf_var5_df6, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var05", y = 'ACF')
+
+acf2_S6 <- ggplot(acf_var7_df6, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var07", y = 'ACF')
+
+grid.arrange(acf1_S6, acf2_S6, nrow=2)
+```
+
+The ACF plots for both Var05 and Var07 exhibit a slow decay, indicating that the data is non-stationary. This non-stationarity means that the mean and variance are not constant over time, and we need to apply differencing to stabilize these properties. Before that, we can also analyse the PACF (Partial Autocorrelation Function) to understand better the autocorrelation structure of `Var05` and `Var07`.
+
+```{r pacf2}
+pacf_var5_S6 <- pacf(s06$Var05[data_range], plot = FALSE)
+pacf_var7_S6 <- pacf(s06$Var07[data_range], plot = FALSE)
+
+pacf_var5_df6 <- data.frame(lag = pacf_var5_S6$lag, pacf = pacf_var5_S6$acf)
+pacf_var7_df6 <- data.frame(lag = pacf_var7_S6$lag, pacf = pacf_var7_S6$acf)
+
+pacf1_S6 <- ggplot(pacf_var5_df6, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var05", y = 'Partial ACF')
+
+pacf2_S6 <- ggplot(pacf_var7_df6, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var07", y = 'Partial ACF')
+
+grid.arrange(pacf1_S6, pacf2_S6, nrow=2)
+```
+
+The PACF plots display significant bars at the initial lags (left side), with decreasing bars as the lag increases. This pattern suggests that each observation in the series is highly correlated with previous observations, indicating a need for differencing to achieve stationarity. Let's do this,
+
+Differencing involves subtracting the previous observation from the current observation to stabilize the mean and achieve stationarity.
+
+```{r}
+# Differencing
+var5_diff_S6 <- diff(s06$Var05[data_range], differences = 1)
+var7_diff_S6 <- diff(s06$Var07[data_range], differences = 1)
+
+var5_diff_df6 <- data.frame(Index = seq_along(var5_diff_S6), Value = var5_diff_S6)
+var7_diff_df6 <- data.frame(Index = seq_along(var7_diff_S6), Value = var7_diff_S6)
+```
+
+```{r}
+# Plot differenced series
+var5_plot6 <- ggplot(var5_diff_df6, aes(x = Index, y = Value)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var05 differenced vs Index", x = "Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+var7_plot6 <- ggplot(var7_diff_df6, aes(x = Index, y = Value)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var07 differenced vs Index", x = "Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+grid.arrange(var5_plot6, var7_plot6, nrow = 2)
+```
+
+The plots of differenced series show that most values are centered around zero, indicating that differencing has removed the trend and stabilized the mean of the series. Outliers observed in the differenced plots may indicate potential anomalies or points of interest for further investigation.
+
+To confirm stationarity, let's perform the ACF and the PACF again on the differenced series and see if the process was succesful:
+
+```{r stationarity_diff}
+acf_var5_S6 <- acf(var5_diff_S6, plot = FALSE)
+acf_var7_S6 <- acf(var7_diff_S6, plot = FALSE)
+
+acf_var5_df6 <- data.frame(lag = acf_var5_S6$lag, acf = acf_var5_S6$acf)
+acf_var7_df6 <- data.frame(lag = acf_var7_S6$lag, acf = acf_var7_S6$acf)
+
+acf1_S6 <- ggplot(acf_var5_df6, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var05", y = 'ACF')
+
+acf2_S6 <- ggplot(acf_var7_df6, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var07", y = 'ACF')
+
+grid.arrange(acf1_S6, acf2_S6, nrow=2)
+```
+
+```{r pacf}
+pacf_var5_S6 <- pacf(var5_diff_S6, plot = FALSE)
+pacf_var7_S6 <- pacf(var7_diff_S6, plot = FALSE)
+
+pacf_var5_df6 <- data.frame(lag = pacf_var5_S6$lag, pacf = pacf_var5_S6$acf)
+pacf_var7_df6 <- data.frame(lag = pacf_var7_S6$lag, pacf = pacf_var7_S6$acf)
+
+pacf1_S6 <- ggplot(pacf_var5_df6, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var05", y = 'Partial ACF')
+
+pacf2_S6 <- ggplot(pacf_var7_df6, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var07", y = 'Partial ACF')
+
+grid.arrange(pacf1_S6, pacf2_S6, nrow=2)
+```
+
+Based on the ACF and PACF plots after differencing, it can be concluded that the time series data has been successfully transformed into a stationary series. This transformation is essential for applying various time series models that assume stationarity, such as ARIMA (AutoRegressive Integrated Moving Average) models. So, the next steps involve fitting time series models and generating forecasts.
+
+#### AutoARIMA Model for `Var05`
+
+
+- Model Fitting
+
+
+```{r}
+# Fit AutoARIMA model for Var05 after differencing
+fit_var5_S6 <- auto.arima(var5_diff_S6, stationary = TRUE)
+summary(fit_var5_S6)
+```
+The `auto.arima` function is used to automatically select the best ARIMA model. The model summary provides details about the selected model's coefficients, standard errors, and statistical significance. based on the values of (AIC, AICc, BIC) and the training set error measures (RMSE, MAE), the model has a reasonable fit.
+
+
+- Diagnostic Check of Residuals
+
+
+```{r}
+# Check residuals of the AutoARIMA model
+checkresiduals(fit_var5_S6)
+```
+Since the p-value is very high (p = 1), we fail to reject the null hypothesis. This suggests that there is no significant evidence of residual autocorrelation at the specified lags. This is a good result, because we can say that we have confidence in using your ARIMA(0,0,1) model for forecasting `var5_diff_S6` without concerns about unaccounted residual autocorrelation.
+
+- Forecasting:
+
+
+```{r}
+# Forecasting with the AutoARIMA model
+fc_var5_S6 <- forecast(fit_var5_S6, h=100)
+autoplot(fc_var5_S6) + ylab('Var5 Differenced Forecast')
+```
+
+The `forecast` function generates forecasts for `Var05` based on the fitted AutoARIMA model. The plot visualizes the forecasted values along with prediction intervals, providing insights into the future behavior of the differenced series. Now, we can perform ARIMA model with Specific Parameters 
+
+This model suggests that the future values of the time series Var05 are expected to remain relatively close to the current level (zero mean), with minimal variation.    
+
+#### ARIMA Model with Specific Parameters
+
+
+- Model Fitting:
+
+
+```{r}
+# Fit ARIMA model with specific parameters for Var05 after differencing
+fit_S6 <- Arima(var5_diff_S6, order=c(2,1,3), include.constant=FALSE)
+fc_S6 <- forecast(fit_S6, h=100)
+autoplot(fc_S6) + ylab('Value')
+```
+
+
+- Forecasting
+
+```{r}
+# Forecasting with the ARIMA model
+fc_S6 <- forecast(fit_S6, h = 100)
+autoplot(fc) + ylab('Value')
+```
+
+This model is similar to ARIMA(0,0,1), the forecasted values form a nearly straight line around zero.
+
+
+```{r}
+# Forecasting with the ARIMA model
+fit_S6 <- auto.arima(s06$Var05[data_range])
+fc_S6 <- forecast(fit_S6, h=100)
+autoplot(fc_S6) + ylab('Value')
+```
+
+The forecasted values for this model form a wiggly line that starts under 50 (at around 26) and gradually increases over time. The shaded area at the end of the curve appears as a trapezoid shape (which is different than the rectangular shape formed on the previous models)
+
+#### ARIMA Model with Drift for Var05
+
+```{r}
+# Fit ARIMA model with drift for Var05
+fit_S6 <- Arima(s06$Var05[data_range], order=c(2,1,3), include.drift=TRUE)
+fc_S6 <- forecast(fit_S6, h=100)
+autoplot(fc_S6) + ylab('Value')
+```
+
+
+
