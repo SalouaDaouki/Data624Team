@@ -1,0 +1,225 @@
+---
+title: "Project1"
+author: "Alice Ding"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(gridExtra)
+library(fpp2)
+library(fpp3)
+```
+
+# Data Importing and Indexing
+
+```{r}
+data_start_ind <- 1
+data_end_ind <- 1622
+forecast_stary_ind <- 1623
+forecast_end_ind <- 1722
+
+path <- paste(getwd(), '/Data Set for Class.xls', sep="")
+sheet_name <- 'S01'
+
+# Read the specified sheet from the Excel file
+s01 <- read_excel(path, sheet = sheet_name)
+```
+
+# Data Visualization
+
+```{r}
+var1_plot <- ggplot(s01, aes(x = SeriesInd, y = Var01)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var01 vs Series Index", x = "Series Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+var2_plot <- ggplot(s01, aes(x = SeriesInd, y = Var02)) +
+  geom_point(color = "orange") +
+  labs(title = "Plot of Var02 vs Series Index", x = "Series Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+grid.arrange(var1_plot, var2_plot, nrow = 2)
+```
+
+# Data Imputation 
+
+I'm using linear imputation, so creating a line of best fit between the last two known points and filling in missing values along that line. This works for Var01, however for Var02, I will impute the median given how it contains more static.
+
+```{r}
+data_range <- which(s01$SeriesInd < 43022)
+na_var1 <- which(is.na(s01$Var01[data_range]))
+```
+
+```{r}
+imputed_var1 <- approx(x = s01$SeriesInd[data_range], y = s01$Var01[data_range], 
+                              xout = s01$SeriesInd[data_range])$y
+```
+
+```{r}
+s01$Var01[data_range][na_var1] <- imputed_var1[na_var1]
+s01 <- s01 |>
+  mutate(Var02 = replace_na(Var02, median(Var02, na.rm=TRUE)))
+```
+
+Values to forecast: 43022 - 43221
+index numbers: 1623 - 1762
+
+# Checking for Stationarity
+
+```{r stationarity}
+acf_var1 <- acf(s01$Var01[data_range], plot = FALSE)
+acf_var2 <- acf(s01$Var02[data_range], plot = FALSE)
+
+acf_var1_df <- data.frame(lag = acf_var1$lag, acf = acf_var1$acf)
+acf_var2_df <- data.frame(lag = acf_var2$lag, acf = acf_var2$acf)
+
+acf1 <- ggplot(acf_var1_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var01", y = 'ACF')
+
+acf2 <- ggplot(acf_var2_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var02", y = 'ACF')
+
+grid.arrange(acf1, acf2, nrow=2)
+```
+
+```{r pacf2}
+pacf_var1 <- pacf(s01$Var01[data_range], plot = FALSE)
+pacf_var2 <- pacf(s01$Var02[data_range], plot = FALSE)
+
+pacf_var1_df <- data.frame(lag = pacf_var1$lag, pacf = pacf_var1$acf)
+pacf_var2_df <- data.frame(lag = pacf_var2$lag, pacf = pacf_var2$acf)
+
+pacf1 <- ggplot(pacf_var1_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var01", y = 'Partial ACF')
+
+pacf2 <- ggplot(pacf_var2_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var02", y = 'Partial ACF')
+
+grid.arrange(pacf1, pacf2, nrow=2)
+```
+
+Var01 is non-stationary while Var02 is stationary.
+
+We will preforming differencing to make Var01 stationary.
+
+```{r}
+var1_diff <- diff(s01$Var01[data_range], differences = 1)
+
+var1_diff_df <- data.frame(Index = seq_along(var1_diff), Value = var1_diff)
+```
+
+```{r}
+var1_plot <- ggplot(var1_diff_df, aes(x = Index, y = Value)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var01 differenced vs Index", x = "Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+grid.arrange(var1_plot, nrow = 1)
+```
+```{r stationarity_diff}
+acf_var1 <- acf(var1_diff, plot = FALSE)
+
+acf_var1_df <- data.frame(lag = acf_var1$lag, acf = acf_var1$acf)
+
+acf1 <- ggplot(acf_var1_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var01", y = 'ACF')
+
+grid.arrange(acf1, nrow = 1)
+```
+
+```{r pacf}
+pacf_var1 <- pacf(var1_diff, plot = FALSE)
+
+pacf_var1_df <- data.frame(lag = pacf_var1$lag, pacf = pacf_var1$acf)
+
+pacf1 <- ggplot(pacf_var1_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var01", y = 'Partial ACF')
+
+grid.arrange(pacf1, nrow=1)
+```
+
+# Forecasting
+
+```{r}
+fit_var1 <- auto.arima(var1_diff, stationary = TRUE)
+summary(fit_var1)
+```
+
+```{r}
+checkresiduals(fit_var1)
+```
+
+```{r}
+fc_var1 <- forecast(fit_var1, h=100)
+autoplot(fc_var1) + ylab('var1 Differenced Forecast')
+```
+
+```{r}
+fit <- Arima(var1_diff, order=c(2,1,3), include.constant=FALSE)
+fc <- forecast(fit, h=100)
+autoplot(fc) + ylab('Value')
+```
+
+```{r}
+fit <- auto.arima(s01$Var01[data_range])
+fc <- forecast(fit, h=100)
+autoplot(fc) + ylab('Value')
+```
+
+
+```{r}
+fit <- Arima(s01$Var01[data_range], order=c(2,1,3), include.drift=TRUE)
+fc <- forecast(fit, h=100)
+autoplot(fc) + ylab('Value')
+```
+
+```{r}
+fit_var2 <- auto.arima(s01$Var02[data_range], stationary = TRUE)
+summary(fit_var2)
+```
+
+```{r}
+checkresiduals(fit_var2)
+```
+
+```{r}
+fc_var2 <- forecast(fit_var2, h=100)
+autoplot(fc_var2) + ylab('var2 Forecast')
+```
+
+```{r}
+fit <- Arima(s01$Var02[data_range], order=c(2,1,3), include.constant=FALSE)
+fc <- forecast(fit, h=100)
+autoplot(fc) + ylab('Value')
+```
+
+```{r}
+fit <- auto.arima(s01$Var02[data_range])
+fc <- forecast(fit, h=100)
+autoplot(fc) + ylab('Value')
+```
+
+
+```{r}
+fit <- Arima(s01$Var02[data_range], order=c(2,1,3), include.drift=TRUE)
+fc <- forecast(fit, h=100)
+autoplot(fc) + ylab('Value')
+```
