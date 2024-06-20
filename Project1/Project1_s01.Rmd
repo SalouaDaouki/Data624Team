@@ -195,20 +195,20 @@ autoplot(fc_var1) + ylab('var1 Differenced Forecast')
 
 ```{r}
 fit <- Arima(var1_diff, order=c(2,1,3), include.constant=FALSE)
-fc <- forecast(fit, h=100)
+fc <- forecast(fit, h=140)
 autoplot(fc) + ylab('Value')
 ```
 
 ```{r}
 fit <- auto.arima(s01$Var01[data_range])
-fc <- forecast(fit, h=100)
+fc <- forecast(fit, h=140)
 autoplot(fc) + ylab('Value')
 ```
 
 
 ```{r}
 fit <- Arima(s01$Var01[data_range], order=c(2,1,3), include.drift=TRUE)
-fc <- forecast(fit, h=100)
+fc <- forecast(fit, h=140)
 autoplot(fc) + ylab('Value')
 ```
 
@@ -222,25 +222,25 @@ checkresiduals(fit_var2)
 ```
 
 ```{r}
-fc_var2 <- forecast(fit_var2, h=100)
+fc_var2 <- forecast(fit_var2, h=140)
 autoplot(fc_var2) + ylab('var2 Forecast')
 ```
 
 ```{r}
 fit <- Arima(s01$Var02[data_range], order=c(2,1,3), include.constant=FALSE)
-fc <- forecast(fit, h=100)
+fc <- forecast(fit, h=140)
 autoplot(fc) + ylab('Value')
 ```
 
 ```{r}
 fit <- auto.arima(s01$Var02[data_range])
-fc <- forecast(fit, h=100)
+fc <- forecast(fit, h=140)
 autoplot(fc) + ylab('Value')
 ```
 
 
 ```{r}
 fit <- Arima(s01$Var02[data_range], order=c(2,1,3), include.drift=TRUE)
-fc <- forecast(fit, h=100)
+fc <- forecast(fit, h=140)
 autoplot(fc) + ylab('Value')
 ```
