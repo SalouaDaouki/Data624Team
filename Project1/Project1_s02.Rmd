@@ -149,14 +149,23 @@ pacf2 <- ggplot(pacf_var3_df, aes(x = lag, y = pacf)) +
 grid.arrange(pacf1, pacf2, nrow=2)
 ```
 
-Var03 is non-stationary while Var02 is stationary.
+The data is non-stationary.
 
-We will preforming differencing to make Var03 stationary.
+We will preforming differencing to make the data stationary.
 
 ```{r}
+var2_diff <- diff(s02$Var02[data_range], differences = 1)
 var3_diff <- diff(s02$Var03[data_range], differences = 1)
 
+var2_diff_df <- data.frame(Index = seq_along(var2_diff), Value = var2_diff)
 var3_diff_df <- data.frame(Index = seq_along(var3_diff), Value = var3_diff)
+```
+
+```{r}
+var2_plot <- ggplot(var2_diff_df, aes(x = Index, y = Value)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var02 differenced vs Index", x = "Index", y = "Value") +
+  theme_minimal()
 ```
 
 ```{r}
@@ -167,37 +176,48 @@ var3_plot <- ggplot(var3_diff_df, aes(x = Index, y = Value)) +
 ```
 
 ```{r}
-grid.arrange(var3_plot, nrow = 1)
+grid.arrange(var2_plot, var3_plot, nrow = 2)
 ```
-
 ```{r stationarity_diff}
+acf_var2 <- acf(var2_diff, plot = FALSE)
 acf_var3 <- acf(var3_diff, plot = FALSE)
 
+acf_var2_df <- data.frame(lag = acf_var2$lag, acf = acf_var2$acf)
 acf_var3_df <- data.frame(lag = acf_var3$lag, acf = acf_var3$acf)
+
+acf1 <- ggplot(acf_var2_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var02", y = 'ACF')
 
 acf2 <- ggplot(acf_var3_df, aes(x = lag, y = acf)) +
   geom_bar(stat = "identity") +
   labs(title = "ACF of Var03", y = 'ACF')
 
-grid.arrange(acf2, nrow=1)
+grid.arrange(acf1, acf2, nrow=2)
 ```
 
 ```{r pacf}
+pacf_var2 <- pacf(var2_diff, plot = FALSE)
 pacf_var3 <- pacf(var3_diff, plot = FALSE)
 
+pacf_var2_df <- data.frame(lag = pacf_var2$lag, pacf = pacf_var2$acf)
 pacf_var3_df <- data.frame(lag = pacf_var3$lag, pacf = pacf_var3$acf)
+
+pacf1 <- ggplot(pacf_var2_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var02", y = 'Partial ACF')
 
 pacf2 <- ggplot(pacf_var3_df, aes(x = lag, y = pacf)) +
   geom_bar(stat = "identity") +
   labs(title = "PACF of Var03", y = 'Partial ACF')
 
-grid.arrange(pacf2, nrow=1)
+grid.arrange(pacf1, pacf2, nrow=2)
 ```
 
 # Forecasting
 
 ```{r}
-fit_var2 <- auto.arima(s02$Var02[data_range], stationary = TRUE)
+fit_var2 <- auto.arima(var2_diff, stationary = TRUE)
 summary(fit_var2)
 ```
 
@@ -211,7 +231,7 @@ autoplot(fc_var2) + ylab('var2 Forecast')
 ```
 
 ```{r}
-fit <- Arima(s02$Var02[data_range], order=c(2,1,3), include.constant=FALSE)
+fit <- Arima(var2_diff, order=c(2,1,3), include.constant=FALSE)
 fc <- forecast(fit, h=100)
 autoplot(fc) + ylab('Value')
 ```

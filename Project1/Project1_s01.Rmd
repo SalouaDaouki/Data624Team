@@ -112,48 +112,69 @@ pacf2 <- ggplot(pacf_var2_df, aes(x = lag, y = pacf)) +
 grid.arrange(pacf1, pacf2, nrow=2)
 ```
 
-Var01 is non-stationary while Var02 is stationary.
+The data is non-stationary.
 
-We will preforming differencing to make Var01 stationary.
+We will preforming differencing to make the data stationary.
 
 ```{r}
 var1_diff <- diff(s01$Var01[data_range], differences = 1)
+var2_diff <- diff(s01$Var02[data_range], differences = 1)
 
 var1_diff_df <- data.frame(Index = seq_along(var1_diff), Value = var1_diff)
+var2_diff_df <- data.frame(Index = seq_along(var2_diff), Value = var2_diff)
 ```
 
 ```{r}
-var1_plot <- ggplot(var1_diff_df, aes(x = Index, y = Value)) +
+var5_plot <- ggplot(var1_diff_df, aes(x = Index, y = Value)) +
   geom_point(color = "blue") +
   labs(title = "Plot of Var01 differenced vs Index", x = "Index", y = "Value") +
   theme_minimal()
 ```
 
 ```{r}
-grid.arrange(var1_plot, nrow = 1)
+var7_plot <- ggplot(var2_diff_df, aes(x = Index, y = Value)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var02 differenced vs Index", x = "Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+grid.arrange(var5_plot, var7_plot, nrow = 2)
 ```
 ```{r stationarity_diff}
-acf_var1 <- acf(var1_diff, plot = FALSE)
+acf_var5 <- acf(var1_diff, plot = FALSE)
+acf_var7 <- acf(var2_diff, plot = FALSE)
 
-acf_var1_df <- data.frame(lag = acf_var1$lag, acf = acf_var1$acf)
+acf_var5_df <- data.frame(lag = acf_var5$lag, acf = acf_var5$acf)
+acf_var7_df <- data.frame(lag = acf_var7$lag, acf = acf_var7$acf)
 
-acf1 <- ggplot(acf_var1_df, aes(x = lag, y = acf)) +
+acf1 <- ggplot(acf_var5_df, aes(x = lag, y = acf)) +
   geom_bar(stat = "identity") +
   labs(title = "ACF of Var01", y = 'ACF')
 
-grid.arrange(acf1, nrow = 1)
+acf2 <- ggplot(acf_var7_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var02", y = 'ACF')
+
+grid.arrange(acf1, acf2, nrow=2)
 ```
 
 ```{r pacf}
-pacf_var1 <- pacf(var1_diff, plot = FALSE)
+pacf_var5 <- pacf(var1_diff, plot = FALSE)
+pacf_var7 <- pacf(var2_diff, plot = FALSE)
 
-pacf_var1_df <- data.frame(lag = pacf_var1$lag, pacf = pacf_var1$acf)
+pacf_var5_df <- data.frame(lag = pacf_var5$lag, pacf = pacf_var5$acf)
+pacf_var7_df <- data.frame(lag = pacf_var7$lag, pacf = pacf_var7$acf)
 
-pacf1 <- ggplot(pacf_var1_df, aes(x = lag, y = pacf)) +
+pacf1 <- ggplot(pacf_var5_df, aes(x = lag, y = pacf)) +
   geom_bar(stat = "identity") +
   labs(title = "PACF of Var01", y = 'Partial ACF')
 
-grid.arrange(pacf1, nrow=1)
+pacf2 <- ggplot(pacf_var7_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var02", y = 'Partial ACF')
+
+grid.arrange(pacf1, pacf2, nrow=2)
 ```
 
 # Forecasting
