@@ -1,0 +1,392 @@
+---
+title: "Project1"
+author: "Coco Donovan"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(gridExtra)
+library(fpp2)
+library(fpp3)
+```
+
+# Data Importing and Indexing
+
+```{r}
+data_start_ind <- 1
+data_end_ind <- 1622
+forecast_stary_ind <- 1623
+forecast_end_ind <- 1762
+
+# Read the specified sheet from the Excel file
+s04 <- read_excel('Data Set for Class.xlsx', sheet = 'S04', skip = 2)
+
+head(s04)
+
+s04$Var01[s04$SeriesInd >= 43022 ] <- NA
+s04$Var02[s04$SeriesInd >= 43022 ] <- NA
+```
+
+# Data Visualization
+
+```{r}
+var1_plot <- ggplot(s04, aes(x = SeriesInd, y = Var01)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var01 vs Series Index", x = "Series Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+var2_plot <- ggplot(s04, aes(x = SeriesInd, y = Var02)) +
+  geom_point(color = "orange") +
+  labs(title = "Plot of Var02 vs Series Index", x = "Series Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+grid.arrange(var1_plot, var2_plot, nrow = 2)
+```
+
+```{r}
+v1 = ts(s04$Var01) %>% tsclean()
+
+v2 = ts(s04$Var02) %>% tsclean()
+```
+
+# Data Imputation 
+
+I'm using linear imputation for variable 1, so creating a line of best fit between the last two known points and filling in missing values along that line. I am using median imputation for variable 2 given its static nature.
+
+```{r}
+data_range <- which(s04$SeriesInd < 43022)
+na_var1 <- which(is.na(s04$Var01[data_range]))
+```
+
+```{r}
+imputed_var1 <- approx(x = s04$SeriesInd[data_range], y = s04$Var01[data_range], 
+                              xout = s04$SeriesInd[data_range])$y
+
+s04$Var01[data_range][na_var1] <- imputed_var1[na_var1]
+```
+
+```{r}
+s04 <- s04 %>% mutate(Var02 = replace_na(Var02, median(Var02, na.rm=TRUE)))
+```
+
+Values to forecast: 43022 - 43221
+index numbers: 1623 - 1762
+
+# Checking for Stationarity
+
+```{r stationarity}
+acf_var1 <- acf(v1[data_range], plot = FALSE)
+acf_var2 <- acf(v2[data_range], plot = FALSE)
+
+acf_var1_df <- data.frame(lag = acf_var1$lag, acf = acf_var1$acf)
+acf_var2_df <- data.frame(lag = acf_var2$lag, acf = acf_var2$acf)
+
+acf1 <- ggplot(acf_var1_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var01", y = 'ACF')
+
+acf2 <- ggplot(acf_var2_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var02", y = 'ACF')
+
+grid.arrange(acf1, acf2, nrow=2)
+```
+
+The ACF plot for Var01 clearly indicates that there is non-stationarity given the slowly decaying nature of the ACF plot across lags. I will have to do differencing to make Var01 stationary. 
+
+Although Var02 decays at a quicker rate, it too seems to display non-stationarity and therefore will also go through differencing.
+
+```{r pacf2}
+pacf_var1 <- pacf(s04$Var01[data_range], plot = FALSE)
+pacf_var2 <- pacf(s04$Var02[data_range], plot = FALSE)
+
+pacf_var1_df <- data.frame(lag = pacf_var1$lag, pacf = pacf_var1$acf)
+pacf_var2_df <- data.frame(lag = pacf_var2$lag, pacf = pacf_var2$acf)
+
+pacf1 <- ggplot(pacf_var1_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var01", y = 'Partial ACF')
+
+pacf2 <- ggplot(pacf_var2_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var02", y = 'Partial ACF')
+
+grid.arrange(pacf1, pacf2, nrow=2)
+```
+
+```{r}
+v1 = s04$Var01[data_range] %>% tsclean()
+
+var1_diff <- diff(v1, differences = 1)
+
+var1_diff_df <- data.frame(Index = seq_along(var1_diff), Value = var1_diff)
+```
+
+```{r}
+var1_plot <- ggplot(var1_diff_df, aes(x = Index, y = Value)) +
+  geom_point(color = "blue") +
+  labs(title = "Plot of Var01 differenced vs Index", x = "Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+v2 = s04$Var02[data_range] %>% tsclean()
+
+var2_diff <- diff(v2, differences = 1)
+
+var2_diff_df <- data.frame(Index = seq_along(var2_diff), Value = var2_diff)
+```
+
+```{r}
+var2_plot <- ggplot(var2_diff_df, aes(x = Index, y = Value)) +
+  geom_point(color = "orange") +
+  labs(title = "Plot of Var02 differenced vs Index", x = "Index", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+grid.arrange(var1_plot, var2_plot, nrow = 2)
+```
+
+```{r stationarity_diff}
+acf_var1 <- acf(var1_diff, plot = FALSE)
+acf_var2 <- acf(var2_diff, plot = FALSE)
+
+acf_var1_df <- data.frame(lag = acf_var1$lag, acf = acf_var1$acf)
+acf_var2_df <- data.frame(lag = acf_var2$lag, acf = acf_var2$acf)
+
+acf1 <- ggplot(acf_var1_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var01", y = 'ACF')
+
+acf2 <- ggplot(acf_var2_df, aes(x = lag, y = acf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ACF of Var02", y = 'ACF')
+
+grid.arrange(acf1, acf2, nrow=2)
+```
+
+Differencing both time series seemed to make both stationary based on the ACF plot.
+
+```{r pacf}
+pacf_var1 <- pacf(var1_diff, plot = FALSE)
+pacf_var2 <- pacf(var2_diff, plot = FALSE)
+
+pacf_var1_df <- data.frame(lag = pacf_var1$lag, pacf = pacf_var1$acf)
+pacf_var2_df <- data.frame(lag = pacf_var2$lag, pacf = pacf_var2$acf)
+
+pacf1 <- ggplot(pacf_var1_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var01", y = 'Partial ACF')
+
+pacf2 <- ggplot(pacf_var2_df, aes(x = lag, y = pacf)) +
+  geom_bar(stat = "identity") +
+  labs(title = "PACF of Var02", y = 'Partial ACF')
+
+grid.arrange(pacf1, pacf2, nrow=2)
+```
+
+### Forecasting (Var01)
+
+```{r}
+var1_aa = auto.arima(var1_diff)
+summary(var1_aa)
+checkresiduals(var1_aa)
+
+fc_var1 <- forecast(var1_aa, h=100)
+autoplot(fc_var1) + ylab('Var1 Differenced Forecast')
+
+var1 = s04$Var01
+
+# Fit the ARIMA model to the differenced data
+fit1 <- Arima(var1_diff, order = c(2, 1, 3), include.drift = TRUE)
+
+# Forecast the differenced series
+fc1 <- forecast(fit1, h = 140)
+
+fc1
+
+forecast_var1_df = data.frame(fc1$mean, fc1$upper[, 1], fc1$lower[, 1], fc1$upper[, 2], fc1$lower[, 2])
+
+forecast_var1_df = forecast_var1_df %>%
+  mutate(Time = row_number() + 1622) %>%
+  rename(ci_80_upper = fc1.upper...1.,
+         ci_80_lower = fc1.lower...1.,
+         ci_95_upper = fc1.upper...2.,
+         ci_95_lower = fc1.lower...2.,
+         forecast = fc1.mean) %>%
+  select(Time, forecast, ci_80_lower, ci_80_upper, ci_95_lower, ci_95_upper)
+
+df = forecast_var1_df
+```
+
+
+```{r}
+# Get the last observed value of the original series
+last_value <- tail(s04$Var01[data_range], 1)
+
+last_value
+
+# Create a new forecast column based on the given logic
+new_forecast <- numeric(nrow(df))
+new_forecast[1] <- df$forecast[1] + last_value
+
+for (i in 2:nrow(df)) {
+  new_forecast[i] <- new_forecast[i - 1] + df$forecast[i]
+}
+
+new_forecast
+
+# Update the confidence intervals
+new_ci_80_lower <- df$ci_80_lower + new_forecast
+new_ci_80_upper <- df$ci_80_upper + new_forecast
+new_ci_95_lower <- df$ci_95_lower + new_forecast
+new_ci_95_upper <- df$ci_95_upper + new_forecast
+
+# Create the new dataframe
+new_df <- data.frame(
+  Time = df$Time,
+  Value = NA,
+  forecast = new_forecast,
+  ci_80_lower = new_ci_80_lower,
+  ci_80_upper = new_ci_80_upper,
+  ci_95_lower = new_ci_95_lower,
+  ci_95_upper = new_ci_95_upper
+)
+
+original_vals = s04 %>%
+  slice(1:1622) %>%
+  select(Var01) %>%
+  rename(Value = Var01) %>%
+  mutate(Time = row_number(), 
+         forecast = NA,
+         ci_80_lower = NA,
+         ci_80_upper = NA,
+         ci_95_lower = NA,
+         ci_95_upper = NA) %>%
+  select(Time, Value, forecast, ci_80_lower, ci_80_upper, ci_95_lower, ci_95_upper)
+
+full_df = rbind(original_vals, new_df)
+
+full_df %>% slice(1500:1670)
+
+# Plot the original series and the forecast with confidence intervals
+ggplot(full_df, aes(x = Time)) +
+  geom_line(aes(y = Value), color = 'black') +
+  geom_line(aes(y = forecast), color = 'blue') +
+  geom_ribbon(aes(ymin = ci_80_lower, ymax = ci_80_upper), fill = 'dodgerblue', alpha = 0.3) +
+  geom_ribbon(aes(ymin = ci_95_lower, ymax = ci_95_upper), fill = 'dodgerblue4', alpha = 0.3) +
+  labs(title = 'Original Series and Forecasts with Confidence Intervals',
+       x = 'Time', y = 'Value') +
+  theme_minimal()
+
+# Write the data frame to a CSV file
+write.csv(forecast_df, "forecasted_data.csv", row.names = FALSE)
+```
+
+
+
+```{r}
+var2_aa = auto.arima(var2_diff)
+summary(var2_aa)
+checkresiduals(var2_aa)
+
+fc2 <- forecast(var2_aa, h=140)
+autoplot(fc_var2)
+
+fc_var2$mean
+
+var2 = s04$Var02
+
+# Fit the ARIMA model to the differenced data
+fit2 <- Arima(var2_diff, order = c(2, 1, 3), include.drift = TRUE)
+
+# Forecast the differenced series
+fc2 <- forecast(fc, h = 140)
+
+forecast_var2_df = data.frame(fc2$mean, fc2$upper[, 1], fc2$lower[, 1], fc2$upper[, 2], fc2$lower[, 2])
+
+forecast_var2_df
+
+forecast_var2_df = forecast_var2_df %>%
+  mutate(Time = row_number() + 1622) %>%
+  rename(ci_80_upper = fc2.upper...1.,
+         ci_80_lower = fc2.lower...1.,
+         ci_95_upper = fc2.upper...2.,
+         ci_95_lower = fc2.lower...2.,
+         forecast = fc2.mean) %>%
+  select(Time, forecast, ci_80_lower, ci_80_upper, ci_95_lower, ci_95_upper)
+
+df = forecast_var2_df
+```
+
+
+```{r}
+# Get the last observed value of the original series
+last_value <- tail(s04$Var02[data_range], 1)
+
+last_value
+
+# Create a new forecast column based on the given logic
+new_forecast <- numeric(nrow(df))
+new_forecast[1] <- df$forecast[1] + last_value
+
+for (i in 2:nrow(df)) {
+  new_forecast[i] <- new_forecast[i - 1] + df$forecast[i]
+}
+
+new_forecast
+
+# Update the confidence intervals
+new_ci_80_lower <- df$ci_80_lower + new_forecast
+new_ci_80_upper <- df$ci_80_upper + new_forecast
+new_ci_95_lower <- df$ci_95_lower + new_forecast
+new_ci_95_upper <- df$ci_95_upper + new_forecast
+
+# Create the new dataframe
+new_df <- data.frame(
+  Time = df$Time,
+  Value = NA,
+  forecast = new_forecast,
+  ci_80_lower = new_ci_80_lower,
+  ci_80_upper = new_ci_80_upper,
+  ci_95_lower = new_ci_95_lower,
+  ci_95_upper = new_ci_95_upper
+)
+
+original_vals = s04 %>%
+  slice(1:1622) %>%
+  select(Var02) %>%
+  rename(Value = Var02) %>%
+  mutate(Time = row_number(), 
+         forecast = NA,
+         ci_80_lower = NA,
+         ci_80_upper = NA,
+         ci_95_lower = NA,
+         ci_95_upper = NA) %>%
+  select(Time, Value, forecast, ci_80_lower, ci_80_upper, ci_95_lower, ci_95_upper)
+
+full_df = rbind(original_vals, new_df)
+
+full_df %>% slice(1500:1670)
+
+# Plot the original series and the forecast with confidence intervals
+ggplot(full_df, aes(x = Time)) +
+  geom_line(aes(y = Value), color = 'black') +
+  geom_line(aes(y = forecast), color = 'blue') +
+  geom_ribbon(aes(ymin = ci_80_lower, ymax = ci_80_upper), fill = 'dodgerblue', alpha = 0.3) +
+  geom_ribbon(aes(ymin = ci_95_lower, ymax = ci_95_upper), fill = 'dodgerblue4', alpha = 0.3) +
+  labs(title = 'Var02 Forecasts using ARIMA(2,1,3) with drift',
+       x = 'Time', y = 'Value') +
+  theme_minimal()
+```
