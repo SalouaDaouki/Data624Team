@@ -1,0 +1,127 @@
+---
+title: "Recommender System Problem"
+author: "Saloua Daouki"
+date: "2024-07-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The problem
+
+Imagine 10000 receipts sitting on your table. Each receipt represents a transaction with items that were purchased. The receipt is a representation of stuff that went into a customer’s basket – and therefore ‘Market Basket Analysis’.
+
+That is exactly what the Groceries Data Set contains: a collection of receipts with each line representing 1 receipt and the items purchased. Each line is called a transaction and each column in a row represents an item.
+
+**"Our" assignment is to use R to mine the data for association rules.  Provide information on  all relevant statistics like support, confidence, lift and others.   Also, Provide your top 10 rules by lift with the associated metrics.**
+
+First, we are going to load the necessary libraries and the data:
+
+### Loading the libraries :
+
+```{r }
+library(arules)
+library(arulesViz)
+```
+
+### Loading the data:
+
+We are loading the data from our github url:
+
+```{r }
+# Load the dataset from the Github URL
+url <- "https://raw.githubusercontent.com/SalouaDaouki/Data624Team/main/GroceryDataSet.csv"
+groceryds <- read.transactions(url, sep=",")
+```
+
+
+Let's glimpse the data:
+
+```{r}
+summary(groceryds)
+```
+The summary of `groceryds` shows:
+
+- that the data in sparse format with about 0.026 density,
+
+- that whole milk, other vegetables, rolls/buns, soda, and yogurt are the most frequently purchased items,
+
+- different sizes of transactions; they range from 1 item to 32 items, but most of the transactions contain less than 7 items.
+
+Now, let's plot the top 10 items by their frequncies in a histogram to visualize the most frequent items:
+
+```{r}
+# Plot the top 10 items by their frequencies
+itemFrequencyPlot(groceryds, topN=10, type="absolute", main="Top 10 Items")
+```
+
+Based on the histogram, whole milk is the most commonly purchased item, followed by other vegetables. Sausage is the least common item shown in the histogram.
+
+Next, we will use the Apriori algorithm and display the top 10 rules with their support, confidence and lift:
+
+```{r}
+# Apply the apriori algorithm to generate association rules
+rules <- apriori(groceryds, parameter = list(supp = 0.001, conf = 0.8))
+```
+
+```{r}
+# Display summary of the rules
+summary(rules)
+```
+
+The `summary(rules)` above shows that the minimum of the support is around 0.001 ($0.001 \times 9835 \  \text{total number of transactions} \approx 10 \ transactions$), this indicates that even the items that appear in 10 transactions were considered. The maximum is 0.003152 which is equivalent to 31 transactions, this indicates that the most frequent items appears in about 31 transactions. The summary also shows that all rulles have a confidence of at least 80% and it goes up to 100%. In addition, lift values range from 3.131 to 11.235, meaning that the items in the rules are at least three times more likely to be found together than by chance, with higher lift values indicating stronger associations. The count supports what we said earlier; it ranges between 10 and 31 transactions.
+
+LEt's inspect the first dew rules than we can use `lift` to further rank the rules:
+
+
+```{r}
+# Inspect the first few rules
+inspect(rules[1:5])
+```
+The inspection above shows that most purchased items are associated with whole milk. To illustrate, let's explain row #3: `support` of 0.17% of all transactions contain both cereals and yogurt, and whole milk. `Confidence` shows that around 81% of transcations that contain cereals and yogurt also contain whole milk. For the `coverage` column, it shows that 0.21% of all transactions contain cereals and yogurt. I think these rules will be helpful to markets in many ways; for example, they will help understand the association between different purchased items to make better decisions about products placement, promotions or even managing the inventory.
+
+LEt's visualize the rules
+
+```{r}
+# Scatter plot of rules
+plot(rules, jitter = 1)
+```
+
+Most of the data points (support, confidence), are toward the left of the graph which indicates that most of the items have low values of support, meaning that most of the items are not frequent in the transactions.We also can see multiple linear positive clusters whish, i think, indicate different groups of rules with different levels of confidence with similar pattern of support (as the support increases the confidence values also increases).
+
+
+Let's sort the rules by lift for furhter see the most associated item:
+
+```{r}
+# Sort rules by lift
+rules_sorted_by_lift <- sort(rules, by="lift")
+
+# Display the first 10 rules sorted by lift
+top_10_rules_by_lift <- head(rules_sorted_by_lift, 10)
+inspect (top_10_rules_by_lift)
+```
+
+In the first 10 association rules sorted by lift, the item "root vegetables" emerges as the most frequently associated consequent item. The high confidence and lift values show that the items in the first column above `lhs` have strong association with the item "root vegetables". In other words, root vegetables play a central role in consumer purchasing behavior within this dataset that influence different items transactions combinations such as citrus fruit, fruit/vegetable juice, other vegetables, and soda.
+
+For better understanding the rules, let's visualize them:
+
+
+
+
+```{r}
+# Visualize the top 10 rules associations by lift
+top_10_by_lift <- head(rules, n = 10, by = "lift")
+plot(top_10_by_lift, method = "graph", engine = "htmlwidget")
+```
+
+The representation above shows association between different items within the rules based on support, lift and the direction of the association. For example, the big red dot on top (rule1) shows that there is an item or group of items that have strong association with the items surrounding the dot. The costumers who buy red/blush wine and liquor are both likely to buy the item (s) represented by the big red dot, while those who buy this item (s) are likely to buy bottled beer. For the big net, based on the lift value, the "root vegetable" is the most common item that is most associated with the other items.
+
+```{r}
+# Visualize the top 10 rules associations by confidence
+top_10_by_confidence <- head(rules, n = 10, by = "confidence")
+plot(top_10_by_confidence, method = "graph", engine = "htmlwidget")
+```
+
+The representation based on the confidence value, rule6 stands out as the strongest one; that item or group of items are more likely to be purchased by costumers who buy citrus fruit, soft cheese and root vegetables. On the other direction, costumers who buy the items in rule 6 are more likely to buy other vegetables as well.
