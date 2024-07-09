@@ -1,0 +1,185 @@
+---
+title: "Project 2"
+author: "Coco Donovan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Loading Packages
+
+```{r}
+library(readr)
+library(dplyr)
+library(mice)
+library(readxl)
+library(fastDummies)
+```
+
+### Loading Data
+
+```{r}
+tb1 <- read_excel("Copy of Data Columns, Types.xlsx")
+tb2 = read_csv('StudentData - TO MODEL.csv')
+
+colnames(tb2) = gsub(" ", "_", colnames(tb2))
+
+tb3 = read_csv('StudentEvaluation- TO PREDICT.csv')
+
+colnames(tb3) = gsub(" ", "_", colnames(tb3))
+```
+
+For whatever reason, "StudentData - TO MODEL.xlsx" was being read incorrectly, so I exported the file to csv and read it that way. I chose to read "StudentEvaluation- TOPREDICT.xslx" as a csv for good measure. I did not see a need to export and reread the info file as that file was not impacted. There were ways to specify that certain columns should be read in specific ways; however, the ways in which I tried to specify the columns did not show any improvements.
+
+After running through this process, I realized that NAs were imputed with zeroes, which was not ideal as some there were already zeroes as non-NA values in at least some of the columns. I manually uploaded the data to google sheets and exported through google sheets. This manual process seemed to solve for data quality issues.
+
+### Data Exploration
+
+```{r}
+sapply(tb2, is.character)
+```
+
+It seems like Brand Code is the only non-numeric value. If the goal is to impute missing values, we could impute missing values using knn (for brand code). I also want to look at what the size of the resulting data set will be if I just apply a remove NA logic.
+
+```{r}
+print(nrow(na.omit(tb2))/nrow(tb2) * 100)
+```
+
+Removing all NA values leaves us with about 79% of the original data set, which is not so bad until you consider that the prediction data set may have missing NA values and if we end up choosing a variable in the modeling phase with missing NAs in the prediction set, that sets us up for a level of inconsistency. It might just make sense to impute missing values and to do this I will use the mice() function from the mice package. Though before I do this, I want to understand the nature of missingness and the nature of my variables with missing values (most variables). I'll start by checking the variables individually as there might be a reason to exclude an individual variable due to a large amount of missingness.
+
+```{r}
+# Calculate percentage of missing values for each variable
+percent_missing <- colMeans(is.na(tb2)) * 100
+
+# Create a dataframe to display results
+missing_summary <- data.frame(
+  variable = names(percent_missing),
+  percent_missing = percent_missing
+)
+
+print(missing_summary %>% select(percent_missing) %>% arrange(desc(percent_missing)) %>% head())
+```
+
+It does not seem that any individual variable has a significant amount of missingness. The variable with the largest amount of missingness, by far, is MFR and is only missing about 8% of its data.
+
+Now, I want to check the distributions of my variables (to assess for normality).
+
+```{r}
+numeric_cols <- sapply(tb2, is.numeric)
+df_numeric <- tb2[, numeric_cols]
+
+for (col in names(df_numeric)) {
+  qqnorm(df_numeric[[col]], main = paste("QQ Plot of", col))
+  qqline(df_numeric[[col]], col = 2)  # Adds a line to the QQ plot
+}
+```
+
+Based on the qqplots, it seems that some variables would benefit from imputation that follows a normal regression and some would be best served by a pmm imputation.
+
+### Imputing Data
+
+```{r}
+# Assuming tb2 and tb3 are your original datasets
+# Convert factor column to factor in tb2 and tb3 (if necessary)
+tb2$Brand_Code <- as.factor(tb2$Brand_Code)
+tb3$Brand_Code <- as.factor(tb3$Brand_Code)
+
+# Add dataset indicator column
+tb2$dataset <- "train"
+tb3$dataset <- "predict"
+
+# Dropping rows where PH is missing in tb2
+tb2 <- tb2[!is.na(tb2$PH), ]
+
+# Combine datasets
+combined_data <- rbind(tb2, tb3)
+
+#Create Dummies for char column
+combined_data <- dummy_cols(combined_data, select_columns = 'Brand_Code', remove_first_dummy = TRUE)
+combined_data <- subset(combined_data, select = -Brand_Code)
+
+# Define columns for norm imputation and others for pmm
+norm_reg_cols <- c('Carb_Volume', 'Fill_Ounces', 'PC_Volume', 'Carb_Pressure', 'Carb_Temp', 'Carb_Pressure1')
+pmm_cols <- setdiff(names(combined_data), norm_reg_cols)
+
+# Specify blocks for imputation
+blocks <- list(
+  norm = norm_reg_cols,
+  pmm = pmm_cols
+)
+
+# Perform mice imputation on combined_data
+imputed_data <- mice(data = combined_data, m = 1, method = c('norm', 'pmm'), blocks = blocks, seed = 500)
+
+# Impute and split data back into tb2 (train) and tb3 (test)
+df_train <- complete(imputed_data, action = "long", include = FALSE)[combined_data$dataset == "train", ]
+df_predict <- complete(imputed_data, action = "long", include = FALSE)[combined_data$dataset == "predict", ]
+
+df_train <- df_train %>%
+  select(-dataset)
+
+df_predict <- df_predict %>%
+  select(-dataset)
+```
+
+I combined the two datasets for imputation purposes, though I did specify which rows corresponded to which dataset, so that I could easily then separate the data after imputation. I then employed normal regression or pmm depending on the my assumptions of normality for a given variable based on a variable's qqplot.
+
+```{r}
+set.seed(42)
+library(caret)
+library(randomForest)
+```
+
+Here we are importing the libraries needed for random forest prediction.
+
+```{r}
+y_var <- "PH"
+
+trainIndex <- createDataPartition(df_train[[y_var]], p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+X_train <- df_train[trainIndex, !names(df_train) %in% y_var]
+X_test <- df_train[-trainIndex, !names(df_train) %in% y_var]
+y_train <- df_train[trainIndex, y_var]
+y_test <- df_train[-trainIndex, y_var]
+
+training_data <- data.frame(X_train, PH = y_train)
+
+control <- trainControl(method="cv", number=5)
+```
+
+In this code we are splitting our known data into test and train data and setting up cross validation for our training step.
+
+```{r}
+tunegrid_rf <- expand.grid(
+  mtry = sample(1:ncol(X_train), 10)
+)
+rf_model <- train(PH ~ ., data=training_data, 
+                  method="rf", 
+                  tuneLength=10,
+                  trControl=control)
+
+
+best_rf_model <- rf_model$finalModel
+rf_pred <- predict(rf_model, X_test)
+
+rf_acc <- postResample(rf_pred, y_test)[["Rsquared"]]
+
+rf_mse <- mean((rf_pred - y_test)^2)
+
+df_predict$PH <- predict(best_rf_model, df_predict_X)
+
+cat("Random Forest MSE: ", rf_mse, "\n")
+
+cat("Random Forest R-squared: ", rf_acc)
+```
+
+With this we are using a random search to find the best random forest model, then using that model to predict the values of our unknown PH's. We are also printing out the R-Squared value and mean squared error of the best model.
+```{r}
+write.csv(df_predict, file = "data_with_predictions.csv", row.names = FALSE)
+head(df_predict)
+```
+
