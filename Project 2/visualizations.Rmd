@@ -1,0 +1,56 @@
+---
+title: "Data Visualizations"
+output: html_document
+date: "2024-07-11"
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(corrplot)
+library(readr)
+
+train <- read_csv(paste(getwd(), '/StudentData - TO MODEL.csv', sep=""))
+
+summary <- describe(train)
+```
+
+```{r}
+# Rename columns to remove spaces
+names(train) <- make.names(names(train))
+
+# Define a function to create histograms
+create_histogram <- function(data, column_name) {
+  ggplot(data, aes_string(x = column_name)) +
+    geom_histogram(binwidth = 1, fill = 'blue', color = 'black') +
+    theme_minimal() +
+    ggtitle(paste('Histogram of', gsub("\\.", " ", column_name)))
+}
+
+# List of all fields with spaces replaced by dots
+fields <- make.names(c("Carb Volume", "Fill Ounces", "PC Volume", "Carb Pressure", "Carb Temp",
+            "PSC", "PSC Fill", "PSC CO2", "Mnf Flow", "Carb Pressure1", "Fill Pressure",
+            "Hyd Pressure1", "Hyd Pressure2", "Hyd Pressure3", "Hyd Pressure4",
+            "Filler Level", "Filler Speed", "Temperature", "Usage cont", "Carb Flow",
+            "Density", "MFR", "Balling", "Pressure Vacuum", "PH", "Oxygen Filler",
+            "Bowl Setpoint", "Pressure Setpoint", "Air Pressurer", "Alch Rel",
+            "Carb Rel", "Balling Lvl"))
+
+# Loop through each field and create a histogram
+for (field in fields) {
+  print(create_histogram(train, field))
+}
+
+# Calculate the correlation matrix
+correlation_matrix <- cor(train[, fields], use = "complete.obs")
+
+# Print the correlation matrix
+print(correlation_matrix)
+```
+
+```{r, fig.width=10, fig.height=11}
+# Visualize the correlation matrix
+corrplot(correlation_matrix, method = "circle", type = "upper", tl.col = "black", tl.srt = 45)
+
+```
